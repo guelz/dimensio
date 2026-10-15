@@ -10,10 +10,13 @@ drag the line clear of the object. Done.
 - Drag the line anywhere; extension lines follow the drag direction, so dimensions sit naturally
   in perspective photos
 - **Ctrl+click** for chains (`70 | 70 | 70 cm` along a wall)
+- Optional angles: every corner of a chain can get an angle label (`35°`) with an arc — drawn
+  only if you type something
 - Text always lies along the line and is never upside down
-- Three settings for the whole image: line width, text size, color
+- Four settings for the whole image: line width, text size, color, outline on/off (off for very
+  thin lines)
 - Saves a flat `photo_dims.png` to send to people, plus `photo.jpg.dims.json` so you can keep
-  editing later
+  editing later — opening either `photo.jpg` or `photo_dims.png` brings the editable lines back
 - Copy the result straight to the clipboard
 
 ## Install
@@ -42,6 +45,7 @@ pipx install --system-site-packages git+https://github.com/guelz/dimensio
 | Open | `dimensio photo.jpg`, Open With, drag and drop, Ctrl+O, or paste (Ctrl+V) |
 | Dimension | click A, click B, type the label, Enter |
 | Chain | Ctrl+click every point but the last; Enter/Tab walks the labels, Shift+Tab goes back |
+| Angle | in a chain, Tab walks length → angle at the corner → length …; leave an angle empty to skip it |
 | Straight | hold Shift for horizontal or vertical |
 | Move | drag the line; drag a point's handle (select the dimension first) |
 | Edit text | double-click the label |
