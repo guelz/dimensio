@@ -28,6 +28,7 @@ from .model import (
     ImageInfo,
     SidecarError,
     Style,
+    find_original,
     is_hex_color,
     load_sidecar,
     output_path,
@@ -39,8 +40,8 @@ from .render import ImageLoadError, load_image, save_image
 IMAGE_FILTER = "Images (*.jpg *.jpeg *.png *.webp *.tif *.tiff *.bmp *.heic *.heif *.avif);;All files (*)"
 SAVE_FILTER = "PNG image (*.png);;JPEG image (*.jpg *.jpeg)"
 HINT = (
-    "Click two points to add a dimension · Ctrl+click adds chain points · Shift snaps · "
-    "Esc cancels · Double-click a label to edit it"
+    "Click, click, type · Ctrl+click: chain · Shift: straight · Esc: cancel · Double-click label: edit · "
+    "Ctrl+scroll: zoom · Middle or Space+drag: pan · Ctrl+0: fit · Ctrl+Z / Ctrl+Shift+Z: undo / redo"
 )
 
 
@@ -59,7 +60,7 @@ class MainWindow(QMainWindow):
         self._build_toolbar()
         self.canvas.style_changed.connect(self._show_style)
         self.canvas.undo.cleanChanged.connect(lambda clean: self.setWindowModified(not clean))
-        self.statusBar().showMessage(HINT)
+        self.statusBar().addWidget(QLabel(HINT))  # stays visible; temporary messages cover it briefly
         self._set_image_loaded(False)
         self._update_title()
         self.resize(1200, 800)
@@ -176,6 +177,9 @@ class MainWindow(QMainWindow):
         if not self._confirm_discard():
             return False
         path = path.absolute()
+        original = find_original(path)
+        if original is not None:
+            path = original
         try:
             image = load_image(path)
         except ImageLoadError as e:
@@ -198,6 +202,8 @@ class MainWindow(QMainWindow):
         self._keep_sidecar = keep_sidecar
         self.canvas.set_document(image, doc)
         self._loaded()
+        if original is not None:
+            self.statusBar().showMessage(f"Opened the original {path.name}, so the dimensions stay editable", 8000)
         return True
 
     def paste(self) -> None:

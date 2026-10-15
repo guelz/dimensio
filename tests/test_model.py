@@ -158,3 +158,22 @@ def test_overflowing_image_size_is_rejected():
     }
     with pytest.raises(SidecarError):
         from_json(data)
+
+
+def test_find_original_for_an_exported_png(tmp_path):
+    from dimensio.model import find_original
+
+    photo = tmp_path / "IMG [1].jpg"
+    photo.write_bytes(b"x")
+    save_sidecar(Document(Style(2, 10)), sidecar_path(photo))
+    assert find_original(output_path(photo)) == photo
+
+
+def test_find_original_needs_the_original_and_its_sidecar(tmp_path):
+    from dimensio.model import find_original
+
+    photo = tmp_path / "photo.jpg"
+    assert find_original(output_path(photo)) is None  # nothing there
+    photo.write_bytes(b"x")
+    assert find_original(output_path(photo)) is None  # no sidecar
+    assert find_original(photo) is None  # not an exported file

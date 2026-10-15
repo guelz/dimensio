@@ -213,3 +213,21 @@ def test_style_box_hands_focus_back_to_the_canvas(win, tmp_path, qtbot):
     qtbot.waitUntil(win.width_box.hasFocus)
     win.width_box.setValue(9)
     assert win.canvas.hasFocus()
+
+
+def test_opening_the_exported_png_reopens_the_original_for_editing(win, tmp_path):
+    photo = make_image(tmp_path / "photo.png")
+    win.open_file(photo)
+    add_dimension(win)
+    win.save()
+    win.open_file(tmp_path / "photo_dims.png")
+    assert win.source == photo
+    assert win.canvas.doc.dimensions == [DIM]
+
+
+def test_status_bar_explains_zoom_pan_and_undo(win):
+    from PySide6.QtWidgets import QLabel
+
+    hints = " ".join(label.text() for label in win.statusBar().findChildren(QLabel))
+    for words in ("Ctrl+scroll", "pan", "Ctrl+Z"):
+        assert words in hints

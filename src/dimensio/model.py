@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import glob
 import hashlib
 import json
 import math
@@ -95,6 +96,18 @@ def sidecar_path(image_path: Path) -> Path:
 
 def output_path(image_path: Path) -> Path:
     return image_path.with_name(image_path.stem + "_dims.png")
+
+
+def find_original(path: Path) -> Path | None:
+    """For an exported `<stem>_dims.png`, the original photo that has a sidecar next to it, if any."""
+    if not path.stem.endswith("_dims"):
+        return None
+    base = path.stem[: -len("_dims")]
+    for side in sorted(path.parent.glob(glob.escape(base) + ".*" + SIDECAR_SUFFIX)):
+        original = side.with_name(side.name[: -len(SIDECAR_SUFFIX)])
+        if original.is_file() and output_path(original) == path:
+            return original
+    return None
 
 
 def to_json(doc: Document) -> dict:
