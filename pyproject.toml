@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "dimensio"
+version = "0.1.0"
+description = "Add dimension lines with your own measurements to photos"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+dependencies = ["PySide6>=6.7"]
+keywords = ["dimension", "measurement", "annotation", "photo", "qt"]
+classifiers = [
+    "Environment :: X11 Applications :: Qt",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: Multimedia :: Graphics",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-qt>=4.4"]
+
+[project.scripts]
+dimensio = "dimensio.app:main"
+
+[project.urls]
+Homepage = "https://github.com/guelz/dimensio"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/dimensio"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+qt_api = "pyside6"
