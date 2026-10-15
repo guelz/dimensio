@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from .model import Dimension, Point
 
 ARROW_HALF_ANGLE = math.radians(15)
+ANGLE_RADIUS_LEG = 0.4  # arc radius as a share of the shorter leg ...
+ANGLE_RADIUS_TEXT = 2.5  # ... but at most this many text sizes
 
 Triangle = tuple[Point, Point, Point]
 
@@ -24,17 +26,22 @@ def text_gap(w: float, s: float) -> float:
     return w / 2 + 0.2 * s
 
 
-def reading_angle(p: Point, q: Point) -> float:
-    """Angle of p->q in degrees (clockwise positive), turned by 180 so text is never upside down.
-
-    The result lies in [-90, 90), so a vertical line reads bottom to top.
-    """
-    angle = math.degrees(math.atan2(q[1] - p[1], q[0] - p[0]))
+def _readable(angle: float) -> float:
+    """Turn a text angle by 180 when needed so text is never upside down. Result in [-90, 90)."""
+    angle = (angle + 180) % 360 - 180
     if angle >= 90:
         angle -= 180
     elif angle < -90:
         angle += 180
     return angle
+
+
+def reading_angle(p: Point, q: Point) -> float:
+    """Angle of p->q in degrees (clockwise positive), turned by 180 so text is never upside down.
+
+    The result lies in [-90, 90), so a vertical line reads bottom to top.
+    """
+    return _readable(math.degrees(math.atan2(q[1] - p[1], q[0] - p[0])))
 
 
 @dataclass(frozen=True)
@@ -50,9 +57,21 @@ class SegmentLayout:
 
 
 @dataclass(frozen=True)
+class AngleLayout:
+    center: Point  # the corner, offset applied (the arc follows the dragged line)
+    radius: float
+    start: float  # degrees towards the previous point (clockwise positive, like atan2 with y down)
+    span: float  # signed sweep to the next point, |span| <= 180 (the smaller angle)
+    label: str
+    text_center: Point  # centre of the label, just outside the middle of the arc
+    text_angle: float
+
+
+@dataclass(frozen=True)
 class Layout:
     segments: tuple[SegmentLayout, ...]
     extension_lines: tuple[tuple[Point, Point], ...]
+    angles: tuple[AngleLayout, ...] = ()
 
 
 def _unit(p: Point, q: Point) -> Point:
@@ -108,4 +127,27 @@ def layout(dim: Dimension, line_width: float, text_size: float) -> Layout:
                 text_angle=angle,
             )
         )
-    return Layout(tuple(segments), extension_lines)
+
+    angles = []
+    for i, label in enumerate(dim.angles, start=1):
+        c = (dim.points[i][0] + dx, dim.points[i][1] + dy)
+        prev = (dim.points[i - 1][0] + dx, dim.points[i - 1][1] + dy)
+        nxt = (dim.points[i + 1][0] + dx, dim.points[i + 1][1] + dy)
+        u1, u2 = _unit(c, prev), _unit(c, nxt)
+        start = math.degrees(math.atan2(u1[1], u1[0]))
+        span = (math.degrees(math.atan2(u2[1], u2[0])) - start + 180) % 360 - 180
+        radius = min(ANGLE_RADIUS_LEG * min(math.dist(c, prev), math.dist(c, nxt)), ANGLE_RADIUS_TEXT * s)
+        mid = math.radians(start + span / 2)
+        reach = radius + gap + 0.6 * s
+        angles.append(
+            AngleLayout(
+                center=c,
+                radius=radius,
+                start=start,
+                span=span,
+                label=label,
+                text_center=(c[0] + reach * math.cos(mid), c[1] + reach * math.sin(mid)),
+                text_angle=_readable(math.degrees(mid) + 90),
+            )
+        )
+    return Layout(tuple(segments), extension_lines, tuple(angles))

@@ -121,3 +121,26 @@ def test_outline_off_draws_no_halo(qapp):
     out = export_image(gray, Document(style=Style(4, 20, "#FF0000", outline=False), dimensions=[dim]))
     assert is_red(out.pixelColor(50, 120))
     assert out.pixelColor(53, 120) == QColor(128, 128, 128)
+
+
+def test_angle_arc_is_drawn_only_when_it_has_text(qapp):
+    from dimensio.geometry import layout
+    import math
+
+    def arc_pixel(angle_label):
+        dim = Dimension(((100.0, 250.0), (200.0, 250.0), (200.0, 150.0)), ("", ""), angles=(angle_label,))
+        [arc] = layout(dim, STYLE.line_width, STYLE.text_size).angles
+        mid = math.radians(arc.start + arc.span / 2)
+        out = export_image(blank(), Document(style=STYLE, dimensions=[dim]))
+        return out.pixelColor(round(arc.center[0] + arc.radius * math.cos(mid)), round(arc.center[1] + arc.radius * math.sin(mid)))
+
+    assert is_red(arc_pixel("90°"))
+    assert is_white(arc_pixel(""))
+
+
+def test_angle_label_gets_a_box_only_when_it_has_text(qapp):
+    dim = Dimension(((0.0, 100.0), (100.0, 100.0), (100.0, 0.0)), ("a", "b"), angles=("",))
+    assert build_paths(dim, STYLE).angle_boxes == [None]
+    from dataclasses import replace
+
+    assert build_paths(replace(dim, angles=("90°",)), STYLE).angle_boxes[0] is not None

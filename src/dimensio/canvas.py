@@ -47,7 +47,25 @@ class _LabelEdit:
     item: DimensionItem
     original: Dimension
     is_new: bool
-    segment: int
+    field: int  # walks along the chain: 2*i = length of segment i, 2*j+1 = angle at corner j+1
+
+
+def _field_count(dim: Dimension) -> int:
+    return len(dim.labels) + len(dim.angles)
+
+
+def _field_text(dim: Dimension, field: int) -> str:
+    return dim.labels[field // 2] if field % 2 == 0 else dim.angles[field // 2]
+
+
+def _with_field(dim: Dimension, field: int, text: str) -> Dimension:
+    if field % 2 == 0:
+        labels = list(dim.labels)
+        labels[field // 2] = text
+        return replace(dim, labels=tuple(labels))
+    angles = list(dim.angles)
+    angles[field // 2] = text
+    return replace(dim, angles=tuple(angles))
 
 
 class Canvas(QGraphicsView):
@@ -372,15 +390,14 @@ class Canvas(QGraphicsView):
     def label_editor(self) -> LabelEditor | None:
         return self._editor
 
-    def edit_labels(self, item: DimensionItem, segment: int) -> None:
-        self._start_label_edit(item, segment, is_new=False)
+    def edit_labels(self, item: DimensionItem, field: int) -> None:
+        self._start_label_edit(item, field, is_new=False)
 
-    def _start_label_edit(self, item: DimensionItem, segment: int, is_new: bool) -> None:
+    def _start_label_edit(self, item: DimensionItem, field: int, is_new: bool) -> None:
         self._close_editor(commit=True)
-        self._edit = _LabelEdit(item, item.dim, is_new, segment)
+        self._edit = _LabelEdit(item, item.dim, is_new, field)
         editor = LabelEditor(self.viewport())
         editor.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        editor.setPlaceholderText("label")
         editor.textEdited.connect(self._on_label_edited)
         editor.step.connect(self._on_label_step)
         editor.cancelled.connect(lambda: self._close_editor(commit=False))
@@ -391,32 +408,42 @@ class Canvas(QGraphicsView):
 
     def _show_label_segment(self) -> None:
         edit = self._edit
-        seg = edit.item.paths.layout.segments[edit.segment]
-        self.ensureVisible(QRectF(QPointF(*seg.start), QPointF(*seg.end)).normalized(), 60, 60)
-        self._editor.setText(edit.item.dim.labels[edit.segment])
+        layout = edit.item.paths.layout
+        if edit.field % 2 == 0:
+            seg = layout.segments[edit.field // 2]
+            self.ensureVisible(QRectF(QPointF(*seg.start), QPointF(*seg.end)).normalized(), 60, 60)
+            self._editor.setPlaceholderText("label")
+        else:
+            arc = layout.angles[edit.field // 2]
+            self.ensureVisible(QRectF(QPointF(*arc.center), QPointF(*arc.text_center)).normalized(), 60, 60)
+            self._editor.setPlaceholderText("angle (optional)")
+        self._editor.setText(_field_text(edit.item.dim, edit.field))
         self._editor.selectAll()
         self._place_editor()
 
     def _place_editor(self) -> None:
         if self._editor is None:
             return
-        seg = self._edit.item.paths.layout.segments[self._edit.segment]
-        anchor = self.mapFromScene(QPointF(*seg.text_anchor))
+        layout = self._edit.item.paths.layout
         height = self._editor.sizeHint().height()
-        self._editor.setGeometry(anchor.x() - EDITOR_WIDTH // 2, anchor.y() - height, EDITOR_WIDTH, height)
+        if self._edit.field % 2 == 0:
+            anchor = self.mapFromScene(QPointF(*layout.segments[self._edit.field // 2].text_anchor))
+            top = anchor.y() - height  # sits on the line, where the label goes
+        else:
+            anchor = self.mapFromScene(QPointF(*layout.angles[self._edit.field // 2].text_center))
+            top = anchor.y() - height // 2
+        self._editor.setGeometry(anchor.x() - EDITOR_WIDTH // 2, top, EDITOR_WIDTH, height)
 
     def _on_label_edited(self, text: str) -> None:
         item = self._edit.item
-        labels = list(item.dim.labels)
-        labels[self._edit.segment] = text
-        item.set_dimension(replace(item.dim, labels=tuple(labels)))
+        item.set_dimension(_with_field(item.dim, self._edit.field, text))
 
     def _on_label_step(self, step: int) -> None:
-        nxt = self._edit.segment + step
-        if nxt >= len(self._edit.item.dim.labels):
+        nxt = self._edit.field + step
+        if nxt >= _field_count(self._edit.item.dim):
             self._close_editor(commit=True)
             return
-        self._edit.segment = max(0, nxt)
+        self._edit.field = max(0, nxt)
         self._show_label_segment()
 
     def _close_editor(self, commit: bool) -> None:

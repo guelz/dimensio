@@ -47,7 +47,7 @@ class PathsItem(QGraphicsItem):
 
     def boundingRect(self) -> QRectF:
         rect = self._paths.strokes.boundingRect().united(self._paths.fills.boundingRect())
-        for box in self._paths.label_boxes:
+        for box in self._paths.label_boxes + [b for b in self._paths.angle_boxes if b is not None]:
             rect = rect.united(box.boundingRect())
         m = self._style.line_width / 2 + halo_width(self._style.line_width) + self._margin
         return rect.adjusted(-m, -m, m, m)
@@ -92,24 +92,28 @@ class DimensionItem(PathsItem):
         w = self._style.line_width
         stroker.setWidth(max(w + 2 * halo_width(w), 2 * self._margin))
         shape = stroker.createStroke(line)
-        for box in self._paths.label_boxes:
+        for box in self._paths.label_boxes + [b for b in self._paths.angle_boxes if b is not None]:
             outline = QPainterPath()
             outline.addPolygon(box)
             outline.closeSubpath()
             shape = shape.united(outline)
         return shape
 
-    def segment_at(self, pos: QPointF) -> int:
+    def field_at(self, pos: QPointF) -> int:
+        """Label field under `pos`: 2*i for segment i, 2*j+1 for the angle at corner j+1."""
         for i, box in enumerate(self._paths.label_boxes):
             if box.containsPoint(pos, Qt.FillRule.OddEvenFill):
-                return i
+                return 2 * i
+        for j, box in enumerate(self._paths.angle_boxes):
+            if box is not None and box.containsPoint(pos, Qt.FillRule.OddEvenFill):
+                return 2 * j + 1
         segments = self._paths.layout.segments
 
         def distance(i: int) -> float:
             s = segments[i]
             return math.hypot(pos.x() - (s.start[0] + s.end[0]) / 2, pos.y() - (s.start[1] + s.end[1]) / 2)
 
-        return min(range(len(segments)), key=distance)
+        return 2 * min(range(len(segments)), key=distance)
 
     def itemChange(self, change, value):
         if change == QGraphicsItem.GraphicsItemChange.ItemSelectedHasChanged:
@@ -138,7 +142,7 @@ class DimensionItem(PathsItem):
             self.canvas.commit_edit(self, start, "Move dimension line")
 
     def mouseDoubleClickEvent(self, event) -> None:
-        self.canvas.edit_labels(self, self.segment_at(event.scenePos()))
+        self.canvas.edit_labels(self, self.field_at(event.scenePos()))
         event.accept()
 
 

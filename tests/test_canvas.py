@@ -114,20 +114,26 @@ def test_ctrl_click_builds_a_chain_and_tab_walks_its_labels(canvas, qtbot):
     assert canvas.label_editor() is None
     click(canvas, 350, 250)
     editor = canvas.label_editor()
+    tab = lambda: qtbot.keyClick(editor, Qt.Key.Key_Tab)  # fields: length, angle, length, angle, length
     qtbot.keyClicks(editor, "70")
-    qtbot.keyClick(editor, Qt.Key.Key_Tab)
+    tab()
+    tab()
     qtbot.keyClicks(editor, "x")
     qtbot.keyClick(editor, Qt.Key.Key_Backtab)
+    qtbot.keyClick(editor, Qt.Key.Key_Backtab)
     assert editor.text() == "70"
-    qtbot.keyClick(editor, Qt.Key.Key_Tab)
+    tab()
+    tab()
     assert editor.text() == "x"
     qtbot.keyClicks(editor, "71")  # replaces the selected "x"
-    qtbot.keyClick(editor, Qt.Key.Key_Tab)
+    tab()
+    tab()
     qtbot.keyClicks(editor, "72")
     qtbot.keyClick(editor, Qt.Key.Key_Return)
     [dim] = canvas.doc.dimensions
     assert list(dim.points) == approx_points([(50, 250), (150, 250), (250, 240), (350, 250)])
     assert dim.labels == ("70", "71", "72")
+    assert dim.angles == ("", "")
 
 
 def test_backspace_removes_the_last_draft_point(canvas, qtbot):
@@ -262,3 +268,43 @@ def test_delete_while_editing_a_label_does_not_break_the_editor(canvas, qtbot):
     canvas.finish_interaction()
     assert canvas.label_editor() is None
     assert canvas.doc.dimensions == []
+
+
+def test_tab_walks_lengths_and_angles_along_the_chain(canvas, qtbot):
+    click(canvas, 50, 250)
+    click(canvas, 150, 250, CTRL)
+    click(canvas, 150, 150)
+    editor = canvas.label_editor()
+    qtbot.keyClicks(editor, "1 m")
+    qtbot.keyClick(editor, Qt.Key.Key_Tab)  # → angle at the corner
+    assert editor.placeholderText() == "angle (optional)"
+    qtbot.keyClicks(editor, "90°")
+    qtbot.keyClick(editor, Qt.Key.Key_Tab)  # → second length
+    qtbot.keyClicks(editor, "1 m")
+    qtbot.keyClick(editor, Qt.Key.Key_Return)
+    [dim] = canvas.doc.dimensions
+    assert dim.labels == ("1 m", "1 m")
+    assert dim.angles == ("90°",)
+
+
+def test_skipping_the_angle_leaves_it_empty(canvas, qtbot):
+    click(canvas, 50, 250)
+    click(canvas, 150, 250, CTRL)
+    click(canvas, 150, 150)
+    editor = canvas.label_editor()
+    for _ in range(3):
+        qtbot.keyClick(editor, Qt.Key.Key_Return)
+    assert canvas.label_editor() is None
+    assert canvas.doc.dimensions[0].angles == ("",)
+
+
+def test_double_click_edits_an_angle_label(canvas, qtbot):
+    with_dimension(canvas, Dimension(((50.0, 250.0), (150.0, 250.0), (150.0, 150.0)), ("a", "b"), angles=("90°",)))
+    centre = canvas.dimension_items()[0].paths.angle_boxes[0].boundingRect().center()
+    double_click(canvas, centre.x(), centre.y())
+    editor = canvas.label_editor()
+    assert editor.text() == "90°"
+    qtbot.keyClicks(editor, "89°")
+    qtbot.keyClick(editor, Qt.Key.Key_Return)  # → next field (length b)
+    qtbot.keyClick(editor, Qt.Key.Key_Return)  # last field: finish
+    assert canvas.doc.dimensions[0].angles == ("89°",)

@@ -43,17 +43,24 @@ class Style:
 
 @dataclass(frozen=True)
 class Dimension:
-    """Measured points P0..Pn, one label per segment, and one shared offset for the whole chain."""
+    """Measured points P0..Pn, one label per segment, one shared offset for the whole chain,
+    and one optional angle label per corner (P1..Pn-1); an empty angle label draws nothing."""
 
     points: tuple[Point, ...]
     labels: tuple[str, ...]
     offset: Point = (0.0, 0.0)
+    angles: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if len(self.points) < 2:
             raise ValueError("a dimension needs at least 2 points")
         if len(self.labels) != len(self.points) - 1:
             raise ValueError("a dimension needs exactly one label per segment")
+        corners = len(self.points) - 2
+        if not self.angles and corners:
+            object.__setattr__(self, "angles", ("",) * corners)
+        if len(self.angles) != corners:
+            raise ValueError("a dimension needs exactly one angle label per corner")
 
     @classmethod
     def new(cls, points) -> Dimension:
@@ -126,10 +133,12 @@ def to_json(doc: Document) -> dict:
         "color": doc.style.color,
         "outline": doc.style.outline,
     }
-    data["dimensions"] = [
-        {"points": [list(p) for p in d.points], "labels": list(d.labels), "offset": list(d.offset)}
-        for d in doc.dimensions
-    ]
+    data["dimensions"] = []
+    for d in doc.dimensions:
+        entry = {"points": [list(p) for p in d.points], "labels": list(d.labels), "offset": list(d.offset)}
+        if any(d.angles):  # only stored when something was typed
+            entry["angles"] = list(d.angles)
+        data["dimensions"].append(entry)
     return data
 
 
@@ -171,6 +180,7 @@ def from_json(data: object) -> Document:
                 tuple(_point(p) for p in d["points"]),
                 tuple(str(label) for label in d["labels"]),
                 _point(d["offset"]),
+                tuple(str(a) for a in d.get("angles", ())),
             )
             for d in data["dimensions"]
         ]

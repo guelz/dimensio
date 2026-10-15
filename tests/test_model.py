@@ -196,3 +196,23 @@ def test_non_bool_outline_is_rejected():
     data = {"version": 1, "style": {"line_width": 2, "text_size": 10, "color": "#FFC400", "outline": "no"}, "dimensions": []}
     with pytest.raises(SidecarError):
         from_json(data)
+
+
+def test_chain_gets_one_empty_angle_per_corner():
+    assert Dimension.new([(0, 0), (1, 0), (2, 1), (3, 0)]).angles == ("", "")
+    assert Dimension(((0.0, 0.0), (1.0, 0.0)), ("a",)).angles == ()
+
+
+def test_wrong_number_of_angles_is_rejected():
+    with pytest.raises(ValueError):
+        Dimension(((0.0, 0.0), (1.0, 0.0), (2.0, 1.0)), ("a", "b"), angles=("1", "2"))
+
+
+def test_angles_round_trip_and_are_omitted_when_empty(tmp_path):
+    with_angle = Dimension(((0.0, 0.0), (1.0, 0.0), (2.0, 1.0)), ("a", "b"), angles=("35°",))
+    without = Dimension(((0.0, 0.0), (1.0, 0.0), (2.0, 1.0)), ("a", "b"))
+    path = tmp_path / "x.dims.json"
+    save_sidecar(Document(Style(2, 10), [with_angle, without]), path)
+    data = path.read_text(encoding="utf-8")
+    assert data.count('"angles"') == 1
+    assert load_sidecar(path).dimensions == [with_angle, without]

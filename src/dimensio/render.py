@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from PySide6.QtCore import QPointF, QRectF, Qt
@@ -71,6 +71,7 @@ class DimensionPaths:
     fills: QPainterPath  # arrowheads and label glyphs, filled
     label_boxes: list[QPolygonF]  # one rotated box per segment label, for hit tests and the editor
     layout: Layout
+    angle_boxes: list[QPolygonF | None] = field(default_factory=list)  # per corner; None = no angle text
 
 
 def build_paths(dim: Dimension, style: Style) -> DimensionPaths:
@@ -101,7 +102,26 @@ def build_paths(dim: Dimension, style: Style) -> DimensionPaths:
             text = QPainterPath()
             text.addText(-width / 2, -metrics.descent(), font, seg.label)
             fills.addPath(transform.map(text))
-    return DimensionPaths(strokes, fills, boxes, lay)
+
+    angle_boxes: list[QPolygonF | None] = []
+    for arc in lay.angles:
+        if not arc.label:
+            angle_boxes.append(None)
+            continue
+        if arc.radius > 0:
+            rect = QRectF(arc.center[0] - arc.radius, arc.center[1] - arc.radius, 2 * arc.radius, 2 * arc.radius)
+            strokes.arcMoveTo(rect, -arc.start)  # Qt arcs run counter-clockwise on screen
+            strokes.arcTo(rect, -arc.start, -arc.span)
+        transform = QTransform()
+        transform.translate(*arc.text_center)
+        transform.rotate(arc.text_angle)
+        width = metrics.horizontalAdvance(arc.label)
+        height = metrics.height()
+        angle_boxes.append(transform.map(QPolygonF(QRectF(-width / 2, -height / 2, width, height))))
+        text = QPainterPath()
+        text.addText(-width / 2, (metrics.ascent() - metrics.descent()) / 2, font, arc.label)
+        fills.addPath(transform.map(text))
+    return DimensionPaths(strokes, fills, boxes, lay, angle_boxes)
 
 
 def paint_dimension(painter: QPainter, paths: DimensionPaths, style: Style) -> None:

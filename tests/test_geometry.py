@@ -117,3 +117,43 @@ def test_one_label_per_segment():
 def test_zero_line_width_with_zero_offset_does_not_divide_by_zero():
     lay = layout(Dimension(((0.0, 0.0), (100.0, 0.0)), ("x",)), 0.0, S)
     assert lay.extension_lines == ()
+
+
+def corner(offset=(0.0, 0.0), angle="90°"):
+    # right angle at (100, 0): legs towards (0, 0) and (100, 100)
+    return Dimension(((0.0, 0.0), (100.0, 0.0), (100.0, 100.0)), ("a", "b"), offset, angles=(angle,))
+
+
+def test_two_point_dimension_has_no_angles():
+    assert layout(Dimension(((0.0, 0.0), (100.0, 0.0)), ("x",)), W, S).angles == ()
+
+
+def test_angle_arc_sits_on_the_corner_and_spans_the_smaller_angle():
+    [arc] = layout(corner(), W, S).angles
+    assert arc.center == pytest.approx((100.0, 0.0))
+    assert abs(arc.span) == pytest.approx(90.0)
+    assert arc.radius == pytest.approx(min(0.4 * 100.0, 2.5 * S))
+    bisector = math.radians(arc.start + arc.span / 2)
+    assert (math.cos(bisector), math.sin(bisector)) == pytest.approx((-math.sqrt(0.5), math.sqrt(0.5)))  # inside the corner
+    assert arc.label == "90°"
+
+
+def test_angle_arc_follows_the_dragged_line():
+    [arc] = layout(corner(offset=(20.0, -30.0)), W, S).angles
+    assert arc.center == pytest.approx((120.0, -30.0))
+
+
+def test_angle_text_is_outside_the_arc_on_the_bisector():
+    [arc] = layout(corner(), W, S).angles
+    bisector = math.radians(arc.start + arc.span / 2)
+    distance = arc.radius + text_gap(W, S) + 0.6 * S
+    expected = (100.0 + distance * math.cos(bisector), 0.0 + distance * math.sin(bisector))
+    assert arc.text_center == pytest.approx(expected)
+    assert -90.0 <= arc.text_angle < 90.0
+
+
+def test_straight_chain_gives_a_half_circle_and_no_crash_on_zero_legs():
+    [arc] = layout(Dimension(((0.0, 0.0), (100.0, 0.0), (200.0, 0.0)), ("a", "b"), angles=("180°",)), W, S).angles
+    assert abs(arc.span) == pytest.approx(180.0)
+    [arc] = layout(Dimension(((0.0, 0.0), (0.0, 0.0), (10.0, 0.0)), ("a", "b"), angles=("x",)), W, S).angles
+    assert math.isfinite(arc.start) and math.isfinite(arc.span) and arc.radius == 0.0
