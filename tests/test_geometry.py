@@ -112,3 +112,8 @@ def test_zero_length_segment_does_not_crash():
 def test_one_label_per_segment():
     lay = layout(chain(), W, S)
     assert [seg.label for seg in lay.segments] == ["a", "b"]
+
+
+def test_zero_line_width_with_zero_offset_does_not_divide_by_zero():
+    lay = layout(Dimension(((0.0, 0.0), (100.0, 0.0)), ("x",)), 0.0, S)
+    assert lay.extension_lines == ()

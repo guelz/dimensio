@@ -180,3 +180,36 @@ def test_main_installs_the_desktop_entry_without_starting_the_gui(tmp_path, monk
     assert (tmp_path / "applications" / "dimensio.desktop").exists()
     assert main(["--uninstall-desktop"]) == 0
     assert not (tmp_path / "applications" / "dimensio.desktop").exists()
+
+
+def test_newer_or_broken_sidecar_is_never_overwritten(win, tmp_path):
+    photo = make_image(tmp_path / "photo.png")
+    side = sidecar_path(photo)
+    side.write_text('{"version": 2}', encoding="utf-8")
+    win.open_file(photo)
+    add_dimension(win)
+    assert win.save()
+    assert side.read_text(encoding="utf-8") == '{"version": 2}'
+    assert (tmp_path / "photo_dims.png").exists()
+    assert len(win.warnings) == 2  # once on open, once on save
+
+
+def test_cancel_keeps_a_half_drawn_draft(win, tmp_path, monkeypatch):
+    from tests.test_canvas import CTRL, click
+
+    win.open_file(make_image(tmp_path / "a.png"))
+    add_dimension(win)
+    click(win.canvas, 30, 80)
+    click(win.canvas, 90, 80, CTRL)
+    monkeypatch.setattr(win, "_ask_save_changes", lambda: "cancel")
+    assert not win.open_file(make_image(tmp_path / "b.png"))
+    assert win.canvas.is_drawing()
+
+
+def test_style_box_hands_focus_back_to_the_canvas(win, tmp_path, qtbot):
+    win.open_file(make_image(tmp_path / "a.png"))
+    win.activateWindow()
+    win.width_box.setFocus()
+    qtbot.waitUntil(win.width_box.hasFocus)
+    win.width_box.setValue(9)
+    assert win.canvas.hasFocus()

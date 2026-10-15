@@ -132,3 +132,29 @@ def test_bad_color_is_rejected():
 @pytest.mark.parametrize("value, ok", [("#FFC400", True), ("#ffc400", True), ("FFC400", False), ("#FFC40", False), (None, False)])
 def test_is_hex_color(value, ok):
     assert is_hex_color(value) is ok
+
+
+@pytest.mark.parametrize(
+    "style, points",
+    [
+        ({"line_width": 0, "text_size": 10, "color": "#FFC400"}, [[0, 0], [1, 0]]),
+        ({"line_width": 2, "text_size": -1, "color": "#FFC400"}, [[0, 0], [1, 0]]),
+        ({"line_width": float("inf"), "text_size": 10, "color": "#FFC400"}, [[0, 0], [1, 0]]),
+        ({"line_width": 2, "text_size": 10, "color": "#FFC400"}, [[0, float("nan")], [1, 0]]),
+    ],
+)
+def test_non_finite_or_non_positive_values_are_rejected(style, points):
+    data = {"version": 1, "style": style, "dimensions": [{"points": points, "labels": ["x"], "offset": [0, 0]}]}
+    with pytest.raises(SidecarError):
+        from_json(data)
+
+
+def test_overflowing_image_size_is_rejected():
+    data = {
+        "version": 1,
+        "image": {"file": "p.jpg", "width": float("inf"), "height": 10, "sha256": "aa"},
+        "style": {"line_width": 2, "text_size": 10, "color": "#FFC400"},
+        "dimensions": [],
+    }
+    with pytest.raises(SidecarError):
+        from_json(data)

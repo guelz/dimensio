@@ -114,9 +114,23 @@ def to_json(doc: Document) -> dict:
     return data
 
 
+def _finite(value) -> float:
+    number = float(value)
+    if not math.isfinite(number):
+        raise ValueError(f"not a finite number: {value!r}")
+    return number
+
+
+def _positive(value) -> float:
+    number = _finite(value)
+    if number <= 0:
+        raise ValueError(f"must be positive: {value!r}")
+    return number
+
+
 def _point(value) -> Point:
     x, y = value
-    return (float(x), float(y))
+    return (_finite(x), _finite(y))
 
 
 def from_json(data: object) -> Document:
@@ -129,7 +143,7 @@ def from_json(data: object) -> Document:
         color = style_data["color"]
         if not is_hex_color(color):
             raise ValueError(f"bad color {color!r}")
-        style = Style(float(style_data["line_width"]), float(style_data["text_size"]), color)
+        style = Style(_positive(style_data["line_width"]), _positive(style_data["text_size"]), color)
         dimensions = [
             Dimension(
                 tuple(_point(p) for p in d["points"]),
@@ -141,8 +155,8 @@ def from_json(data: object) -> Document:
         image = None
         if "image" in data:
             i = data["image"]
-            image = ImageInfo(str(i["file"]), int(i["width"]), int(i["height"]), str(i["sha256"]))
-    except (KeyError, TypeError, ValueError) as e:
+            image = ImageInfo(str(i["file"]), int(_positive(i["width"])), int(_positive(i["height"])), str(i["sha256"]))
+    except (KeyError, TypeError, ValueError, OverflowError) as e:
         raise SidecarError(f"invalid sidecar: {e}") from e
     return Document(style=style, dimensions=dimensions, image=image)
 

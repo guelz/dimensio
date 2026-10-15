@@ -49,6 +49,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.settings = QSettings("dimensio", "dimensio")
         self.source: Path | None = None
+        self._keep_sidecar = False  # True when the existing sidecar could not be read: never overwrite it
         self.canvas = Canvas(self)
         self.canvas.setAcceptDrops(False)  # drops are handled by the window
         self.canvas.viewport().setAcceptDrops(False)
@@ -144,6 +145,7 @@ class MainWindow(QMainWindow):
         if self.canvas.doc is not None:
             style = replace(self.canvas.doc.style, line_width=self.width_box.value(), text_size=self.size_box.value())
             self.canvas.set_style(style)
+        self.canvas.setFocus()  # keep Ctrl+Z, Delete, Esc and Space working on the drawing
 
     def choose_color(self) -> None:
         if self.canvas.doc is None:
@@ -151,6 +153,7 @@ class MainWindow(QMainWindow):
         color = QColorDialog.getColor(QColor(self.canvas.doc.style.color), self, "Dimension color")
         if color.isValid():
             self.set_color(color.name())
+        self.canvas.setFocus()
 
     def set_color(self, name: str) -> None:
         name = name.upper()
@@ -181,15 +184,18 @@ class MainWindow(QMainWindow):
         info = ImageInfo.from_file(path, image.width(), image.height())
         doc = Document(Style.for_image(image.width(), image.height(), self._last_color()), image=info)
         side = sidecar_path(path)
+        keep_sidecar = False
         if side.exists():
             try:
                 saved = load_sidecar(side)
             except SidecarError as e:
-                self._warn(f"Ignoring {side.name} because it could not be read.\n\n{e}")
+                keep_sidecar = True
+                self._warn(f"Ignoring {side.name} because it could not be read. It will be left untouched.\n\n{e}")
             else:
                 if saved.image is None or saved.image.matches(info) or self._ask_load_anyway():
                     doc = Document(saved.style, saved.dimensions, info)
         self.source = path
+        self._keep_sidecar = keep_sidecar
         self.canvas.set_document(image, doc)
         self._loaded()
         return True
@@ -241,7 +247,9 @@ class MainWindow(QMainWindow):
 
     def _write(self, target: Path) -> None:
         save_image(self.canvas.flattened(), target)
-        if self.source is not None:
+        if self.source is not None and self._keep_sidecar:
+            self._warn(f"Saved {target.name}. {sidecar_path(self.source).name} was left untouched, so these dimensions are not kept for re-editing.")
+        elif self.source is not None:
             side = sidecar_path(self.source)
             try:
                 save_sidecar(self.canvas.doc, side)
@@ -271,7 +279,8 @@ class MainWindow(QMainWindow):
         self.canvas.setFocus()
 
     def _confirm_discard(self) -> bool:
-        self.canvas.finish_interaction()
+        # Confirm the label being typed, but keep a half-drawn draft until the user decides.
+        self.canvas.commit_label_editor()
         if self.canvas.doc is None or self.canvas.undo.isClean():
             return True
         answer = self._ask_save_changes()

@@ -75,7 +75,7 @@ def layout(dim: Dimension, line_width: float, text_size: float) -> Layout:
     d_len = math.hypot(dx, dy)
 
     extension_lines: tuple[tuple[Point, Point], ...] = ()
-    if d_len >= w:
+    if d_len > 0 and d_len >= w:
         ux, uy = dx / d_len, dy / d_len
         o = overshoot(w, s)
         extension_lines = tuple(((px, py), (px + dx + ux * o, py + dy + uy * o)) for px, py in dim.points)

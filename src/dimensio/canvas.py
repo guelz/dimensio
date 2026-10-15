@@ -311,6 +311,9 @@ class Canvas(QGraphicsView):
     def finish_interaction(self) -> None:
         """Drop an unfinished drawing and confirm an open label editor."""
         self._cancel_draft()
+        self.commit_label_editor()
+
+    def commit_label_editor(self) -> None:
         self._close_editor(commit=True)
 
     # ----- keyboard -----
@@ -340,6 +343,13 @@ class Canvas(QGraphicsView):
             return
         super().keyPressEvent(event)
 
+    def focusOutEvent(self, event) -> None:
+        # A Space release that happens elsewhere (Alt+Tab, toolbar) must not leave pan mode stuck on.
+        self._space = False
+        self._pan_from = None
+        self.viewport().unsetCursor()
+        super().focusOutEvent(event)
+
     def keyReleaseEvent(self, event) -> None:
         if event.key() == Qt.Key.Key_Space and not event.isAutoRepeat():
             self._space = False
@@ -348,6 +358,7 @@ class Canvas(QGraphicsView):
         super().keyReleaseEvent(event)
 
     def _delete_selected(self) -> None:
+        self.commit_label_editor()
         indexes = sorted((i for i, item in enumerate(self._items) if item.isSelected()), reverse=True)
         if not indexes:
             return

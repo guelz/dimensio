@@ -242,3 +242,23 @@ def test_finish_interaction_confirms_an_open_editor(canvas, qtbot):
 def test_flattened_has_the_image_size(canvas):
     with_dimension(canvas, Dimension(((50.0, 150.0), (350.0, 150.0)), ("a",)))
     assert canvas.flattened().size() == QSize(400, 300)
+
+
+def test_losing_focus_releases_space_pan(canvas, qtbot):
+    from PySide6.QtGui import QFocusEvent
+
+    qtbot.keyPress(canvas, Qt.Key.Key_Space)
+    QApplication.sendEvent(canvas, QFocusEvent(QEvent.Type.FocusOut, Qt.FocusReason.ActiveWindowFocusReason))
+    click(canvas, 50, 150)
+    assert canvas.is_drawing()
+
+
+def test_delete_while_editing_a_label_does_not_break_the_editor(canvas, qtbot):
+    dim = Dimension(((50.0, 150.0), (350.0, 150.0)), ("a",), (0.0, -60.0))
+    with_dimension(canvas, dim)
+    click(canvas, 200, 90)
+    canvas.edit_labels(canvas.dimension_items()[0], 0)
+    qtbot.keyClick(canvas, Qt.Key.Key_Delete)
+    canvas.finish_interaction()
+    assert canvas.label_editor() is None
+    assert canvas.doc.dimensions == []
