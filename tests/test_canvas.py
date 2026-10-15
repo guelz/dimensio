@@ -1,0 +1,244 @@
+import pytest
+from PySide6.QtCore import QEvent, QPoint, QPointF, QSize, Qt
+from PySide6.QtGui import QColor, QImage, QMouseEvent
+from PySide6.QtWidgets import QApplication
+
+from dimensio.canvas import Canvas
+from dimensio.model import Dimension, Document, Style
+
+LEFT = Qt.MouseButton.LeftButton
+NO_BUTTON = Qt.MouseButton.NoButton
+NO_MOD = Qt.KeyboardModifier.NoModifier
+CTRL = Qt.KeyboardModifier.ControlModifier
+SHIFT = Qt.KeyboardModifier.ShiftModifier
+STYLE = Style(4, 20, "#FF0000")
+
+
+def blank(width=400, height=300):
+    image = QImage(width, height, QImage.Format.Format_RGB32)
+    image.fill(QColor("white"))
+    return image
+
+
+@pytest.fixture
+def canvas(qtbot):
+    c = Canvas()
+    c.resize(800, 600)
+    qtbot.addWidget(c)
+    c.show()
+    qtbot.waitExposed(c)
+    c.set_document(blank(), Document(style=STYLE))
+    return c
+
+
+def with_dimension(canvas, dim):
+    canvas.set_document(blank(), Document(style=STYLE, dimensions=[dim]))
+
+
+def view_pos(canvas, x, y) -> QPoint:
+    return canvas.mapFromScene(QPointF(x, y))
+
+
+def send(canvas, etype, pos, button, buttons, mods=NO_MOD):
+    viewport = canvas.viewport()
+    event = QMouseEvent(etype, QPointF(pos), QPointF(viewport.mapToGlobal(pos)), button, buttons, mods)
+    QApplication.sendEvent(viewport, event)
+
+
+def click(canvas, x, y, mods=NO_MOD):
+    p = view_pos(canvas, x, y)
+    send(canvas, QEvent.Type.MouseButtonPress, p, LEFT, LEFT, mods)
+    send(canvas, QEvent.Type.MouseButtonRelease, p, LEFT, NO_BUTTON, mods)
+
+
+def double_click(canvas, x, y):
+    p = view_pos(canvas, x, y)
+    send(canvas, QEvent.Type.MouseButtonPress, p, LEFT, LEFT)
+    send(canvas, QEvent.Type.MouseButtonRelease, p, LEFT, NO_BUTTON)
+    send(canvas, QEvent.Type.MouseButtonDblClick, p, LEFT, LEFT)
+    send(canvas, QEvent.Type.MouseButtonRelease, p, LEFT, NO_BUTTON)
+
+
+def drag(canvas, start, end):
+    a, b = view_pos(canvas, *start), view_pos(canvas, *end)
+    send(canvas, QEvent.Type.MouseButtonPress, a, LEFT, LEFT)
+    send(canvas, QEvent.Type.MouseMove, QPoint((a.x() + b.x()) // 2, (a.y() + b.y()) // 2), NO_BUTTON, LEFT)
+    send(canvas, QEvent.Type.MouseMove, b, NO_BUTTON, LEFT)
+    send(canvas, QEvent.Type.MouseButtonRelease, b, LEFT, NO_BUTTON)
+
+
+def approx_points(points):
+    return [pytest.approx(p, abs=1.0) for p in points]
+
+
+def test_click_click_type_creates_dimension(canvas, qtbot):
+    click(canvas, 50, 150)
+    click(canvas, 350, 150)
+    editor = canvas.label_editor()
+    assert editor is not None
+    qtbot.keyClicks(editor, "284 cm")
+    qtbot.keyClick(editor, Qt.Key.Key_Return)
+    assert canvas.label_editor() is None
+    [dim] = canvas.doc.dimensions
+    assert list(dim.points) == approx_points([(50, 150), (350, 150)])
+    assert dim.labels == ("284 cm",)
+    assert dim.offset == (0.0, 0.0)
+    assert canvas.undo.count() == 1
+    canvas.undo.undo()
+    assert canvas.doc.dimensions == []
+    assert canvas.dimension_items() == []
+
+
+def test_escape_while_labelling_discards_the_new_dimension(canvas, qtbot):
+    click(canvas, 50, 150)
+    click(canvas, 350, 150)
+    qtbot.keyClick(canvas.label_editor(), Qt.Key.Key_Escape)
+    assert canvas.doc.dimensions == []
+    assert canvas.dimension_items() == []
+    assert canvas.undo.count() == 0
+
+
+def test_escape_cancels_the_draft(canvas, qtbot):
+    click(canvas, 50, 150)
+    assert canvas.is_drawing()
+    qtbot.keyClick(canvas, Qt.Key.Key_Escape)
+    assert not canvas.is_drawing()
+    click(canvas, 100, 100)
+    assert canvas.is_drawing() and canvas.label_editor() is None
+
+
+def test_ctrl_click_builds_a_chain_and_tab_walks_its_labels(canvas, qtbot):
+    click(canvas, 50, 250)
+    click(canvas, 150, 250, CTRL)
+    click(canvas, 250, 240, CTRL)
+    assert canvas.label_editor() is None
+    click(canvas, 350, 250)
+    editor = canvas.label_editor()
+    qtbot.keyClicks(editor, "70")
+    qtbot.keyClick(editor, Qt.Key.Key_Tab)
+    qtbot.keyClicks(editor, "x")
+    qtbot.keyClick(editor, Qt.Key.Key_Backtab)
+    assert editor.text() == "70"
+    qtbot.keyClick(editor, Qt.Key.Key_Tab)
+    assert editor.text() == "x"
+    qtbot.keyClicks(editor, "71")  # replaces the selected "x"
+    qtbot.keyClick(editor, Qt.Key.Key_Tab)
+    qtbot.keyClicks(editor, "72")
+    qtbot.keyClick(editor, Qt.Key.Key_Return)
+    [dim] = canvas.doc.dimensions
+    assert list(dim.points) == approx_points([(50, 250), (150, 250), (250, 240), (350, 250)])
+    assert dim.labels == ("70", "71", "72")
+
+
+def test_backspace_removes_the_last_draft_point(canvas, qtbot):
+    click(canvas, 50, 150)
+    click(canvas, 150, 150, CTRL)
+    qtbot.keyClick(canvas, Qt.Key.Key_Backspace)
+    click(canvas, 350, 150)
+    qtbot.keyClick(canvas.label_editor(), Qt.Key.Key_Return)
+    [dim] = canvas.doc.dimensions
+    assert list(dim.points) == approx_points([(50, 150), (350, 150)])
+
+
+def test_shift_snaps_to_horizontal(canvas, qtbot):
+    click(canvas, 50, 150)
+    click(canvas, 350, 170, SHIFT)
+    qtbot.keyClick(canvas.label_editor(), Qt.Key.Key_Return)
+    [dim] = canvas.doc.dimensions
+    assert dim.points[1][1] == dim.points[0][1]
+
+
+def test_click_too_close_to_the_previous_point_is_ignored(canvas):
+    click(canvas, 50, 150)
+    click(canvas, 50.3, 150.2)
+    assert canvas.is_drawing()
+    assert canvas.label_editor() is None
+
+
+def test_clicks_without_an_image_do_nothing(qtbot):
+    c = Canvas()
+    c.resize(400, 300)
+    qtbot.addWidget(c)
+    c.show()
+    click(c, 10, 10)
+    assert not c.is_drawing()
+
+
+def test_dragging_the_line_changes_only_the_offset(canvas):
+    dim = Dimension(((50.0, 150.0), (350.0, 150.0)), ("a",))
+    with_dimension(canvas, dim)
+    drag(canvas, (200, 150), (230, 90))
+    [moved] = canvas.doc.dimensions
+    assert moved.points == dim.points
+    assert moved.offset == pytest.approx((30, -60), abs=1.0)
+    canvas.undo.undo()
+    assert canvas.doc.dimensions == [dim]
+
+
+def test_dragging_a_handle_moves_one_point(canvas):
+    dim = Dimension(((50.0, 150.0), (350.0, 150.0)), ("a",), (0.0, -60.0))
+    with_dimension(canvas, dim)
+    click(canvas, 200, 90)  # select via the dimension line
+    assert canvas.dimension_items()[0].isSelected()
+    drag(canvas, (50, 150), (60, 170))
+    [moved] = canvas.doc.dimensions
+    assert moved.points[0] == pytest.approx((60, 170), abs=1.0)
+    assert moved.points[1] == dim.points[1]
+    assert moved.offset == dim.offset
+
+
+def test_double_click_edits_an_existing_label(canvas, qtbot):
+    with_dimension(canvas, Dimension(((50.0, 150.0), (350.0, 150.0)), ("old",), (0.0, -60.0)))
+    centre = canvas.dimension_items()[0].paths.label_boxes[0].boundingRect().center()
+    double_click(canvas, centre.x(), centre.y())
+    editor = canvas.label_editor()
+    assert editor is not None and editor.text() == "old"
+    qtbot.keyClicks(editor, "new")
+    qtbot.keyClick(editor, Qt.Key.Key_Return)
+    assert canvas.doc.dimensions[0].labels == ("new",)
+    canvas.undo.undo()
+    assert canvas.doc.dimensions[0].labels == ("old",)
+
+
+def test_escape_while_editing_an_existing_label_restores_it(canvas, qtbot):
+    with_dimension(canvas, Dimension(((50.0, 150.0), (350.0, 150.0)), ("old",), (0.0, -60.0)))
+    canvas.edit_labels(canvas.dimension_items()[0], 0)
+    qtbot.keyClicks(canvas.label_editor(), "zzz")
+    qtbot.keyClick(canvas.label_editor(), Qt.Key.Key_Escape)
+    assert canvas.dimension_items()[0].dim.labels == ("old",)
+    assert canvas.undo.count() == 0
+
+
+def test_delete_removes_the_selected_dimension(canvas, qtbot):
+    dim = Dimension(((50.0, 150.0), (350.0, 150.0)), ("a",), (0.0, -60.0))
+    with_dimension(canvas, dim)
+    click(canvas, 200, 90)
+    qtbot.keyClick(canvas, Qt.Key.Key_Delete)
+    assert canvas.doc.dimensions == []
+    canvas.undo.undo()
+    assert canvas.doc.dimensions == [dim]
+
+
+def test_style_change_is_undoable_and_reaches_the_items(canvas):
+    with_dimension(canvas, Dimension(((50.0, 150.0), (350.0, 150.0)), ("a",)))
+    seen = []
+    canvas.style_changed.connect(seen.append)
+    canvas.set_style(Style(8, 30, "#00FF00"))
+    assert canvas.doc.style == Style(8, 30, "#00FF00")
+    assert seen[-1] == Style(8, 30, "#00FF00")
+    canvas.undo.undo()
+    assert canvas.doc.style == STYLE
+
+
+def test_finish_interaction_confirms_an_open_editor(canvas, qtbot):
+    click(canvas, 50, 150)
+    click(canvas, 350, 150)
+    qtbot.keyClicks(canvas.label_editor(), "1 m")
+    canvas.finish_interaction()
+    assert canvas.doc.dimensions[0].labels == ("1 m",)
+    assert canvas.undo.count() == 1
+
+
+def test_flattened_has_the_image_size(canvas):
+    with_dimension(canvas, Dimension(((50.0, 150.0), (350.0, 150.0)), ("a",)))
+    assert canvas.flattened().size() == QSize(400, 300)
