@@ -55,7 +55,7 @@ class ChangeDimension(QUndoCommand):
 
 
 def _changed_fields(old: Style, new: Style) -> frozenset[str]:
-    return frozenset(f for f in ("line_width", "text_size", "color") if getattr(old, f) != getattr(new, f))
+    return frozenset(f for f in ("line_width", "text_size", "color", "outline") if getattr(old, f) != getattr(new, f))
 
 
 class ChangeStyle(QUndoCommand):

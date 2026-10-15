@@ -33,6 +33,7 @@ class Style:
     line_width: float
     text_size: float
     color: str = DEFAULT_COLOR
+    outline: bool = True  # contrasting halo under lines and text
 
     @classmethod
     def for_image(cls, width: int, height: int, color: str = DEFAULT_COLOR) -> Style:
@@ -119,7 +120,12 @@ def to_json(doc: Document) -> dict:
             "height": doc.image.height,
             "sha256": doc.image.sha256,
         }
-    data["style"] = {"line_width": doc.style.line_width, "text_size": doc.style.text_size, "color": doc.style.color}
+    data["style"] = {
+        "line_width": doc.style.line_width,
+        "text_size": doc.style.text_size,
+        "color": doc.style.color,
+        "outline": doc.style.outline,
+    }
     data["dimensions"] = [
         {"points": [list(p) for p in d.points], "labels": list(d.labels), "offset": list(d.offset)}
         for d in doc.dimensions
@@ -156,7 +162,10 @@ def from_json(data: object) -> Document:
         color = style_data["color"]
         if not is_hex_color(color):
             raise ValueError(f"bad color {color!r}")
-        style = Style(_positive(style_data["line_width"]), _positive(style_data["text_size"]), color)
+        outline = style_data.get("outline", True)
+        if not isinstance(outline, bool):
+            raise ValueError(f"bad outline {outline!r}")
+        style = Style(_positive(style_data["line_width"]), _positive(style_data["text_size"]), color, outline)
         dimensions = [
             Dimension(
                 tuple(_point(p) for p in d["points"]),

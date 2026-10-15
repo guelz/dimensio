@@ -231,3 +231,17 @@ def test_status_bar_explains_zoom_pan_and_undo(win):
     hints = " ".join(label.text() for label in win.statusBar().findChildren(QLabel))
     for words in ("Ctrl+scroll", "pan", "Ctrl+Z"):
         assert words in hints
+
+
+def test_outline_checkbox_is_undoable_and_remembered(win, tmp_path):
+    win.open_file(make_image(tmp_path / "a.png"))
+    win.outline_box.setChecked(False)
+    assert win.canvas.doc.style.outline is False
+    win.undo()
+    assert win.canvas.doc.style.outline is True
+    assert win.outline_box.isChecked()
+    win.redo()
+    win.canvas.undo.setClean()
+    win.open_file(make_image(tmp_path / "b.png"))
+    assert win.canvas.doc.style.outline is False
+    assert not win.outline_box.isChecked()

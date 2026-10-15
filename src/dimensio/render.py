@@ -110,12 +110,13 @@ def paint_dimension(painter: QPainter, paths: DimensionPaths, style: Style) -> N
     h = halo_width(style.line_width)
     painter.save()
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-    # Halo first, underneath everything, so lines and text stay readable on any background.
-    painter.setBrush(Qt.BrushStyle.NoBrush)
-    painter.setPen(QPen(halo, style.line_width + 2 * h, Qt.PenStyle.SolidLine, Qt.PenCapStyle.SquareCap, Qt.PenJoinStyle.MiterJoin))
-    painter.drawPath(paths.strokes)
-    painter.setPen(QPen(halo, 2 * h, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
-    painter.drawPath(paths.fills)
+    if style.outline:
+        # Halo first, underneath everything, so lines and text stay readable on any background.
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.setPen(QPen(halo, style.line_width + 2 * h, Qt.PenStyle.SolidLine, Qt.PenCapStyle.SquareCap, Qt.PenJoinStyle.MiterJoin))
+        painter.drawPath(paths.strokes)
+        painter.setPen(QPen(halo, 2 * h, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+        painter.drawPath(paths.fills)
     painter.setPen(QPen(color, style.line_width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.FlatCap, Qt.PenJoinStyle.MiterJoin))
     painter.drawPath(paths.strokes)
     painter.setPen(Qt.PenStyle.NoPen)

@@ -112,3 +112,12 @@ def test_load_rejects_garbage(qapp, tmp_path):
     path.write_bytes(b"not an image")
     with pytest.raises(ImageLoadError):
         load_image(path)
+
+
+def test_outline_off_draws_no_halo(qapp):
+    dim = Dimension(((50.0, 150.0), (350.0, 150.0)), ("ABC",), (0.0, -60.0))
+    gray = blank()
+    gray.fill(QColor(128, 128, 128))
+    out = export_image(gray, Document(style=Style(4, 20, "#FF0000", outline=False), dimensions=[dim]))
+    assert is_red(out.pixelColor(50, 120))
+    assert out.pixelColor(53, 120) == QColor(128, 128, 128)

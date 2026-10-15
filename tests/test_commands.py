@@ -64,3 +64,12 @@ def test_style_changes_to_different_fields_stay_separate(qapp):
     stack.push(ChangeStyle(host, s0, s1))
     stack.push(ChangeStyle(host, s1, replace(s1, color="#00FF00")))
     assert stack.count() == 2
+
+
+def test_outline_toggle_is_its_own_undo_step(qapp):
+    host, stack = FakeHost(), QUndoStack()
+    s0 = host.style
+    s1 = replace(s0, line_width=3)
+    stack.push(ChangeStyle(host, s0, s1))
+    stack.push(ChangeStyle(host, s1, replace(s1, outline=False)))
+    assert stack.count() == 2

@@ -11,6 +11,7 @@ from PySide6.QtCore import QSettings, Qt, QTimer
 from PySide6.QtGui import QAction, QColor, QGuiApplication, QIcon, QKeySequence, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
+    QCheckBox,
     QColorDialog,
     QFileDialog,
     QLabel,
@@ -117,9 +118,14 @@ class MainWindow(QMainWindow):
         self.color_button.setToolTip("Color of all dimensions")
         self.color_button.clicked.connect(self.choose_color)
         bar.addWidget(self.color_button)
+        bar.addWidget(QLabel("  "))
+        self.outline_box = QCheckBox("Outline")
+        self.outline_box.setToolTip("Contrasting outline around lines and text; switch off for very thin lines")
+        self.outline_box.toggled.connect(self._on_outline_input)
+        bar.addWidget(self.outline_box)
 
     def _set_image_loaded(self, loaded: bool) -> None:
-        for widget in (self.save_action, self.save_as_action, self.copy_action, self.width_box, self.size_box, self.color_button):
+        for widget in (self.save_action, self.save_as_action, self.copy_action, self.width_box, self.size_box, self.color_button, self.outline_box):
             widget.setEnabled(loaded)
 
     def _update_title(self) -> None:
@@ -136,6 +142,9 @@ class MainWindow(QMainWindow):
             box.blockSignals(True)
             box.setValue(round(value))
             box.blockSignals(False)
+        self.outline_box.blockSignals(True)
+        self.outline_box.setChecked(style.outline)
+        self.outline_box.blockSignals(False)
         swatch = QPixmap(16, 16)
         swatch.fill(QColor(style.color))
         self.color_button.setIcon(QIcon(swatch))
@@ -147,6 +156,12 @@ class MainWindow(QMainWindow):
             style = replace(self.canvas.doc.style, line_width=self.width_box.value(), text_size=self.size_box.value())
             self.canvas.set_style(style)
         self.canvas.setFocus()  # keep Ctrl+Z, Delete, Esc and Space working on the drawing
+
+    def _on_outline_input(self, checked: bool) -> None:
+        if self.canvas.doc is not None:
+            self.canvas.set_style(replace(self.canvas.doc.style, outline=checked))
+            self.settings.setValue("outline", checked)
+        self.canvas.setFocus()
 
     def choose_color(self) -> None:
         if self.canvas.doc is None:
@@ -161,9 +176,11 @@ class MainWindow(QMainWindow):
         self.canvas.set_style(replace(self.canvas.doc.style, color=name))
         self.settings.setValue("color", name)
 
-    def _last_color(self) -> str:
-        value = self.settings.value("color", DEFAULT_COLOR)
-        return value if is_hex_color(value) else DEFAULT_COLOR
+    def _new_style(self, width: int, height: int) -> Style:
+        """Defaults for a new image, with the colour and outline the user picked last."""
+        color = self.settings.value("color", DEFAULT_COLOR)
+        outline = self.settings.value("outline", True, type=bool)
+        return replace(Style.for_image(width, height, color if is_hex_color(color) else DEFAULT_COLOR), outline=outline)
 
     # ----- files -----
 
@@ -186,7 +203,7 @@ class MainWindow(QMainWindow):
             self._warn(f"Could not open the image.\n\n{e}")
             return False
         info = ImageInfo.from_file(path, image.width(), image.height())
-        doc = Document(Style.for_image(image.width(), image.height(), self._last_color()), image=info)
+        doc = Document(self._new_style(image.width(), image.height()), image=info)
         side = sidecar_path(path)
         keep_sidecar = False
         if side.exists():
@@ -220,7 +237,7 @@ class MainWindow(QMainWindow):
         if not self._confirm_discard():
             return
         self.source = None
-        self.canvas.set_document(image, Document(Style.for_image(image.width(), image.height(), self._last_color())))
+        self.canvas.set_document(image, Document(self._new_style(image.width(), image.height())))
         self._loaded()
 
     def save(self) -> bool:

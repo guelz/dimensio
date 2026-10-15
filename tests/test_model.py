@@ -177,3 +177,22 @@ def test_find_original_needs_the_original_and_its_sidecar(tmp_path):
     photo.write_bytes(b"x")
     assert find_original(output_path(photo)) is None  # no sidecar
     assert find_original(photo) is None  # not an exported file
+
+
+def test_outline_defaults_on_and_round_trips(tmp_path):
+    assert Style(2, 10).outline is True
+    doc = Document(style=Style(2, 10, "#FFC400", outline=False))
+    path = tmp_path / "x.dims.json"
+    save_sidecar(doc, path)
+    assert load_sidecar(path).style.outline is False
+
+
+def test_old_sidecar_without_outline_means_on():
+    data = {"version": 1, "style": {"line_width": 2, "text_size": 10, "color": "#FFC400"}, "dimensions": []}
+    assert from_json(data).style.outline is True
+
+
+def test_non_bool_outline_is_rejected():
+    data = {"version": 1, "style": {"line_width": 2, "text_size": 10, "color": "#FFC400", "outline": "no"}, "dimensions": []}
+    with pytest.raises(SidecarError):
+        from_json(data)
