@@ -18,6 +18,7 @@ friend, an AI drawing your house model) knows without asking which number belong
 - Optional angles: every corner of a chain can get an angle label (`35°`) with an arc — drawn
   only if you type something
 - Level markers (`▽ ±0.00`, `+1.25 m`) for heights and terrain
+- Plain lines, and one-line notes with an arrow pointing at what you mean ("drain pipe")
 - Text always lies along the line and is never upside down
 - Settings for the whole image: line width, text size, color, outline on/off (off for very thin
   lines), ID tags on/off
@@ -49,11 +50,13 @@ pipx install --system-site-packages git+https://github.com/guelz/dimensio
 | Do | How |
 |---|---|
 | Open | `dimensio photo.jpg`, Open With, drag and drop, Ctrl+O, or paste (Ctrl+V) |
-| Tool | **D** dimension, **L** level marker (toolbar) |
+| Tool | **1**/**D** dimension, **2**/**L** level marker, **3** line, **4**/**T** note (toolbar) |
 | Dimension | click A, click B, type the label, Enter |
 | Chain | Ctrl+click every point but the last; Enter/Tab walks the labels, Shift+Tab goes back |
 | Angle | in a chain, Tab walks length → angle at the corner → length …; leave an angle empty to skip it |
 | Level | with the level tool, click the spot and type its height; drag the marker away if it's in the way |
+| Line | click, Ctrl+click for more points, click to finish; drag to move it |
+| Note | click what you mean, type one line, Enter; drag the text where it fits |
 | Straight | hold Shift for horizontal or vertical |
 | Move | drag the line; drag a point's handle (select the dimension first) |
 | Edit text | double-click the label |
@@ -67,8 +70,9 @@ pipx install --system-site-packages git+https://github.com/guelz/dimensio
 
 Every exported PNG carries its dimension data as JSON inside the file, and the same data sits in
 the `.dims.json` next to the original. It names every item (`A`, `B`, … for dimensions, `L1`, …
-for levels — switch on **IDs** to tag them in the picture too) and explains its own fields:
-pixel coordinates of every measured point, the label of every segment, angle and level.
+for levels, `N1`, … for lines, `T1`, … for notes — switch on **IDs** to tag them in the picture
+too) and explains its own fields: pixel coordinates of every point, the text of every segment,
+angle, level and note.
 
 ```bash
 dimensio --data photo_dims.png    # print it
