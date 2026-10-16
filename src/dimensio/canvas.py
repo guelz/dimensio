@@ -6,7 +6,7 @@ import math
 from dataclasses import dataclass, replace
 
 from PySide6.QtCore import QEvent, QPointF, QRectF, Qt, Signal
-from PySide6.QtGui import QColor, QImage, QPainter, QPixmap, QUndoStack
+from PySide6.QtGui import QColor, QImage, QPainter, QPalette, QPixmap, QUndoStack
 from PySide6.QtWidgets import QGraphicsScene, QGraphicsView, QLineEdit, QWidget
 
 from .commands import AddDimension, ChangeDimension, ChangeStyle, RemoveDimension
@@ -26,6 +26,26 @@ class LabelEditor(QLineEdit):
 
     step = Signal(int)
     cancelled = Signal()
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._prefix = ""
+
+    def prefix(self) -> str:
+        return self._prefix
+
+    def set_prefix(self, prefix: str) -> None:
+        """A symbol in front of the text saying what the field is: ↔ length, ∠ angle."""
+        self._prefix = prefix
+        self.setTextMargins(self.fontMetrics().horizontalAdvance(prefix) + 6, 0, 0, 0)
+        self.update()
+
+    def paintEvent(self, event) -> None:
+        super().paintEvent(event)
+        painter = QPainter(self)
+        painter.setPen(self.palette().color(QPalette.ColorRole.PlaceholderText))
+        painter.drawText(self.rect().adjusted(6, 0, 0, 0), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, self._prefix)
+        painter.end()
 
     def event(self, event) -> bool:
         if event.type() == QEvent.Type.KeyPress:
@@ -413,10 +433,13 @@ class Canvas(QGraphicsView):
             seg = layout.segments[edit.field // 2]
             self.ensureVisible(QRectF(QPointF(*seg.start), QPointF(*seg.end)).normalized(), 60, 60)
             self._editor.setPlaceholderText("label")
+            self._editor.set_prefix("↔")
         else:
             arc = layout.angles[edit.field // 2]
             self.ensureVisible(QRectF(QPointF(*arc.center), QPointF(*arc.text_center)).normalized(), 60, 60)
             self._editor.setPlaceholderText("angle (optional)")
+            self._editor.set_prefix("∠")
+        edit.item.set_highlight(edit.field)
         self._editor.setText(_field_text(edit.item.dim, edit.field))
         self._editor.selectAll()
         self._place_editor()
@@ -453,6 +476,7 @@ class Canvas(QGraphicsView):
         self._editor = self._edit = None
         editor.hide()
         editor.deleteLater()
+        edit.item.set_highlight(None)
         self.setFocus()
         index = self._items.index(edit.item)
         final = edit.item.dim

@@ -7,8 +7,8 @@ from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QPointF, QRectF, Qt
-from PySide6.QtGui import QColor, QPainterPath, QPainterPathStroker, QPen
-from PySide6.QtWidgets import QGraphicsEllipseItem, QGraphicsItem
+from PySide6.QtGui import QColor, QPainterPath, QPainterPathStroker, QPalette, QPen
+from PySide6.QtWidgets import QApplication, QGraphicsEllipseItem, QGraphicsItem
 
 from .model import Dimension, Style
 from .render import DimensionPaths, build_paths, halo_width, paint_dimension
@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from .canvas import Canvas
 
 HANDLE_RADIUS = 6  # screen pixels
+HIGHLIGHT_WIDTH = 10  # screen pixels; marks the line or arc whose label is being typed
 
 
 class PathsItem(QGraphicsItem):
@@ -67,6 +68,7 @@ class DimensionItem(PathsItem):
         self.setCursor(Qt.CursorShape.SizeAllCursor)
         self._drag_from: QPointF | None = None
         self._drag_start: Dimension | None = None
+        self._highlight: int | None = None
         self.handles = [HandleItem(self, i) for i in range(len(dim.points))]
         self._place_handles()
 
@@ -77,6 +79,35 @@ class DimensionItem(PathsItem):
     def _place_handles(self) -> None:
         for handle, (x, y) in zip(self.handles, self._dim.points):
             handle.setPos(x, y)
+
+    def highlighted_field(self) -> int | None:
+        return self._highlight
+
+    def set_highlight(self, field: int | None) -> None:
+        """Mark the segment (even field) or corner arc (odd field) being edited. Screen only, never exported."""
+        self._highlight = field
+        self.update()
+
+    def paint(self, painter, option, widget=None) -> None:
+        if self._highlight is not None:
+            path = QPainterPath()
+            layout = self._paths.layout
+            if self._highlight % 2 == 0:
+                seg = layout.segments[self._highlight // 2]
+                path.moveTo(*seg.start)
+                path.lineTo(*seg.end)
+            else:
+                arc = layout.angles[self._highlight // 2]
+                rect = QRectF(arc.center[0] - arc.radius, arc.center[1] - arc.radius, 2 * arc.radius, 2 * arc.radius)
+                path.arcMoveTo(rect, -arc.start)
+                path.arcTo(rect, -arc.start, -arc.span)
+            accent = QApplication.palette().color(QPalette.ColorRole.Highlight)
+            accent.setAlpha(140)
+            pen = QPen(accent, HIGHLIGHT_WIDTH, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
+            pen.setCosmetic(True)
+            painter.setPen(pen)
+            painter.drawPath(path)
+        super().paint(painter, option, widget)
 
     def set_hit_tolerance(self, tolerance: float) -> None:
         """Scene-unit grab distance around the line; the canvas updates it on every zoom."""

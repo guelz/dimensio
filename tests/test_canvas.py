@@ -308,3 +308,27 @@ def test_double_click_edits_an_angle_label(canvas, qtbot):
     qtbot.keyClick(editor, Qt.Key.Key_Return)  # → next field (length b)
     qtbot.keyClick(editor, Qt.Key.Key_Return)  # last field: finish
     assert canvas.doc.dimensions[0].angles == ("89°",)
+
+
+def test_editor_shows_which_kind_of_field_and_highlights_it(canvas, qtbot):
+    click(canvas, 50, 250)
+    click(canvas, 150, 250, CTRL)
+    click(canvas, 150, 150)
+    editor = canvas.label_editor()
+    item = canvas.dimension_items()[0]
+    assert editor.prefix() == "↔" and item.highlighted_field() == 0
+    qtbot.keyClick(editor, Qt.Key.Key_Tab)
+    assert editor.prefix() == "∠" and item.highlighted_field() == 1
+    qtbot.keyClick(editor, Qt.Key.Key_Tab)
+    qtbot.keyClick(editor, Qt.Key.Key_Return)
+    assert canvas.dimension_items()[0].highlighted_field() is None
+
+
+def test_highlight_never_reaches_the_export(canvas, qtbot):
+    with_dimension(canvas, Dimension(((50.0, 150.0), (350.0, 150.0)), ("a",), (0.0, -60.0)))
+    before = canvas.flattened()
+    canvas.edit_labels(canvas.dimension_items()[0], 0)
+    assert canvas.dimension_items()[0].highlighted_field() == 0
+    from dimensio.render import export_image
+
+    assert export_image(canvas.image, canvas.doc) == before
