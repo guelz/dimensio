@@ -11,7 +11,7 @@ from PySide6.QtWidgets import QGraphicsScene, QGraphicsView, QLineEdit, QWidget
 
 from .commands import AddDimension, ChangeDimension, ChangeStyle, RemoveDimension
 from .items import EditableItem, HandleItem, PathsItem, make_item
-from .model import Annotation, Dimension, Document, Level, Point, Style, annotation_ids
+from .model import Annotation, Dimension, Document, Level, Line, Note, Point, Style, annotation_ids
 from .render import export_image
 
 HIT_TOLERANCE = 6  # screen pixels around a dimension line that still grab it
@@ -71,17 +71,19 @@ class _LabelEdit:
 
 
 def _field_count(dim: Annotation) -> int:
-    return 1 if isinstance(dim, Level) else len(dim.labels) + len(dim.angles)
+    if isinstance(dim, Line):
+        return 0
+    return 1 if isinstance(dim, (Level, Note)) else len(dim.labels) + len(dim.angles)
 
 
 def _field_text(dim: Annotation, field: int) -> str:
-    if isinstance(dim, Level):
+    if isinstance(dim, (Level, Note)):
         return dim.label
     return dim.labels[field // 2] if field % 2 == 0 else dim.angles[field // 2]
 
 
 def _with_field(dim: Annotation, field: int, text: str) -> Annotation:
-    if isinstance(dim, Level):
+    if isinstance(dim, (Level, Note)):
         return replace(dim, label=text)
     if field % 2 == 0:
         labels = list(dim.labels)
@@ -115,7 +117,7 @@ class Canvas(QGraphicsView):
         self._preview: PathsItem | None = None
         self._editor: LabelEditor | None = None
         self._edit: _LabelEdit | None = None
-        self.tool = "dimension"  # or "level"
+        self.tool = "dimension"  # or "level", "line", "note"
 
     # ----- document -----
 
@@ -136,7 +138,7 @@ class Canvas(QGraphicsView):
         self.style_changed.emit(doc.style)
 
     def set_tool(self, tool: str) -> None:
-        """'dimension': click, (Ctrl+)click, type. 'level': one click places a level marker."""
+        """'dimension' / 'line': click, (Ctrl+)click (, type). 'level' / 'note': one click, then type."""
         self.finish_interaction()
         self.tool = tool
 
@@ -262,8 +264,11 @@ class Canvas(QGraphicsView):
             super().mousePressEvent(event)
             return
         self.scene().clearSelection()
-        if self.tool == "level":
-            self.insert_dimension(len(self._items), Level(self._event_point(event)))
+        if self.tool in ("level", "note"):
+            point = self._event_point(event)
+            s = self.doc.style.text_size
+            item = Level(point) if self.tool == "level" else Note(point, "", (1.5 * s, -1.5 * s))
+            self.insert_dimension(len(self._items), item)
             self._start_label_edit(self._items[-1], 0, is_new=True)
         else:
             self._add_draft_point(self._event_point(event), event.modifiers())
@@ -345,7 +350,7 @@ class Canvas(QGraphicsView):
         if len(points) < 2:
             self._remove_preview()
             return
-        dim = Dimension.new(points)
+        dim = Line(tuple(points)) if self.tool == "line" else Dimension.new(points)
         if self._preview is None:
             self._preview = PathsItem(dim, self.doc.style)
             self._preview.setZValue(3)
@@ -366,6 +371,9 @@ class Canvas(QGraphicsView):
     def _finish_draft(self) -> None:
         points = self._draft
         self._cancel_draft()
+        if self.tool == "line":  # nothing to label
+            self.undo.push(AddDimension(self, len(self._items), Line(tuple(points))))
+            return
         # The new dimension is shown at once but only becomes an undo step when its labels are confirmed.
         self.insert_dimension(len(self._items), Dimension.new(points))
         self._start_label_edit(self._items[-1], 0, is_new=True)
@@ -435,7 +443,8 @@ class Canvas(QGraphicsView):
         return self._editor
 
     def edit_labels(self, item: EditableItem, field: int) -> None:
-        self._start_label_edit(item, field, is_new=False)
+        if _field_count(item.dim):
+            self._start_label_edit(item, field, is_new=False)
 
     def _start_label_edit(self, item: EditableItem, field: int, is_new: bool) -> None:
         self._close_editor(commit=True)
@@ -495,6 +504,8 @@ class Canvas(QGraphicsView):
         final = edit.item.dim
         if edit.is_new:
             self.remove_dimension(index)
+            if isinstance(final, Note) and not final.label.strip():
+                return  # a note without text says nothing
             if commit:
                 self.undo.push(AddDimension(self, index, final))
         elif not commit:

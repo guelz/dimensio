@@ -260,3 +260,25 @@ def test_ids_style_round_trips(tmp_path):
     path = tmp_path / "x.dims.json"
     save_sidecar(doc, path)
     assert load_sidecar(path).style.ids is True
+
+
+def test_lines_and_notes_round_trip_with_their_own_ids(tmp_path):
+    import json
+
+    from dimensio.model import Level, Line, Note, annotation_ids
+
+    items = [Line(((0.0, 0.0), (5.0, 5.0), (9.0, 1.0))), Note((3.0, 4.0), "drain pipe", (40.0, -40.0)),
+             Dimension(((0.0, 0.0), (1.0, 0.0)), ("a",)), Level((1.0, 1.0), "±0.00")]
+    assert annotation_ids(items) == ["N1", "T1", "A", "L1"]
+    path = tmp_path / "x.dims.json"
+    save_sidecar(Document(Style(2, 10), items), path)
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert data["lines"][0]["id"] == "N1" and data["notes"][0]["label"] == "drain pipe"
+    assert sorted(map(repr, load_sidecar(path).dimensions)) == sorted(map(repr, items))
+
+
+def test_line_needs_two_points():
+    from dimensio.model import Line
+
+    with pytest.raises(ValueError):
+        Line(((0.0, 0.0),))

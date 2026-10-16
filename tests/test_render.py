@@ -165,3 +165,20 @@ def test_id_tags_are_drawn_only_when_switched_on(qapp):
     tagged = export_image(blank(), Document(style=Style(4, 20, "#FF0000", ids=True), dimensions=[dim]))
     assert plain != tagged
     assert export_image(blank(), Document(style=STYLE, dimensions=[dim])) == plain
+
+
+def test_line_is_a_plain_polyline(qapp):
+    from dimensio.model import Line
+
+    out = export_image(blank(), Document(style=STYLE, dimensions=[Line(((50.0, 150.0), (350.0, 150.0)))]))
+    assert is_red(out.pixelColor(200, 150))
+    assert is_red(out.pixelColor(52, 150)) and is_white(out.pixelColor(52, 144))  # no arrowhead widening the end
+
+
+def test_note_draws_an_arrowhead_at_the_spot_and_its_text(qapp):
+    from dimensio.model import Note
+
+    out = export_image(blank(), Document(style=STYLE, dimensions=[Note((100.0, 250.0), "pipe", (0.0, -150.0))]))
+    assert is_red(out.pixelColor(100, 244))  # inside the arrowhead just above the spot
+    text = sum(is_red(out.pixelColor(x, y)) for x in range(100, 160) for y in range(75, 99))
+    assert text > 20

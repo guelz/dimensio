@@ -179,3 +179,18 @@ def test_dragged_level_marker_gets_a_leader_to_the_spot():
     lay = level_layout(Level((100.0, 200.0), "x", (40.0, -80.0)), W, S)
     assert lay.triangle[0] == (140.0, 120.0)
     assert lay.leader == ((100.0, 200.0), (140.0, 120.0))
+
+
+def test_note_text_sits_at_the_offset_and_the_arrow_points_at_the_spot():
+    from dimensio.geometry import note_layout
+    from dimensio.model import Note
+
+    right = note_layout(Note((100.0, 200.0), "pipe", (60.0, -80.0)), W, S)
+    assert right.attach == (160.0, 120.0) and right.text_right
+    tip, a, b = right.arrow
+    assert tip == (100.0, 200.0)
+    base = ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)
+    assert cross(vec(tip, base), (60.0, -80.0)) == pytest.approx(0.0, abs=1e-9)  # along the leader
+    left = note_layout(Note((100.0, 200.0), "pipe", (-60.0, -80.0)), W, S)
+    assert not left.text_right
+    assert note_layout(Note((100.0, 200.0), "pipe", (0.0, 0.0)), W, S).arrow is None

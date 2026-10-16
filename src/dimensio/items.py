@@ -10,7 +10,7 @@ from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QPainterPath, QPainterPathStroker, QPalette, QPen, QPolygonF
 from PySide6.QtWidgets import QApplication, QGraphicsEllipseItem, QGraphicsItem
 
-from .model import Annotation, Dimension, Level, Point, Style
+from .model import Annotation, Dimension, Level, Line, Note, Point, Style
 from .render import DimensionPaths, build_paths, halo_width, paint_dimension
 
 if TYPE_CHECKING:
@@ -114,6 +114,11 @@ class EditableItem(PathsItem):
     def _highlight_path(self, field: int) -> QPainterPath | None:
         return None
 
+    def dragged(self, start: Annotation, dx: float, dy: float) -> Annotation:
+        """The item after dragging its body by (dx, dy): by default the drawing moves off its points."""
+        ox, oy = start.offset
+        return replace(start, offset=(ox + dx, oy + dy))
+
     # ----- shared behaviour -----
 
     def set_dimension(self, dim: Annotation, style: Style | None = None) -> None:
@@ -177,8 +182,7 @@ class EditableItem(PathsItem):
         if self._drag_from is None or self._drag_start is None:
             return
         delta = event.scenePos() - self._drag_from
-        ox, oy = self._drag_start.offset
-        self.set_dimension(replace(self._drag_start, offset=(ox + delta.x(), oy + delta.y())))
+        self.set_dimension(self.dragged(self._drag_start, delta.x(), delta.y()))
 
     def mouseReleaseEvent(self, event) -> None:
         super().mouseReleaseEvent(event)
@@ -287,8 +291,58 @@ class LevelItem(EditableItem):
         return path
 
 
+class LineItem(EditableItem):
+    """A plain polyline: dragging moves the whole line, handles move single points, no text."""
+
+    def handle_points(self) -> tuple[Point, ...]:
+        return self._dim.points
+
+    def with_point(self, index: int, point: Point) -> Line:
+        points = list(self._dim.points)
+        points[index] = point
+        return Line(tuple(points))
+
+    def dragged(self, start: Line, dx: float, dy: float) -> Line:
+        return Line(tuple((x + dx, y + dy) for x, y in start.points))
+
+    def _grab_lines(self) -> QPainterPath:
+        return self._paths.strokes
+
+    def field_at(self, pos: QPointF) -> int:
+        return 0
+
+    def mouseDoubleClickEvent(self, event) -> None:
+        event.accept()  # nothing to edit
+
+
+class NoteItem(EditableItem):
+    """Text with a leader and an arrowhead: dragging moves the text, the handle moves the spot."""
+
+    def handle_points(self) -> tuple[Point, ...]:
+        return (self._dim.point,)
+
+    def with_point(self, index: int, point: Point) -> Note:
+        return replace(self._dim, point=point)
+
+    def _grab_lines(self) -> QPainterPath:
+        return self._paths.strokes
+
+    def field_at(self, pos: QPointF) -> int:
+        return 0
+
+    def field_info(self, field: int) -> FieldInfo:
+        box = self._paths.label_boxes[0]
+        return FieldInfo("✎", "note", _box_center(box), True, box.boundingRect())
+
+    def _highlight_path(self, field: int) -> QPainterPath:
+        return self._paths.strokes
+
+
+_ITEM_TYPES = {Level: LevelItem, Line: LineItem, Note: NoteItem}
+
+
 def make_item(canvas: Canvas, dim: Annotation, style: Style) -> EditableItem:
-    return LevelItem(canvas, dim, style) if isinstance(dim, Level) else DimensionItem(canvas, dim, style)
+    return _ITEM_TYPES.get(type(dim), DimensionItem)(canvas, dim, style)
 
 
 class HandleItem(QGraphicsEllipseItem):

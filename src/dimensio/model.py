@@ -78,7 +78,27 @@ class Level:
     offset: Point = (0.0, 0.0)
 
 
-Annotation = Dimension | Level
+@dataclass(frozen=True)
+class Line:
+    """A plain polyline: no arrows, no labels."""
+
+    points: tuple[Point, ...]
+
+    def __post_init__(self) -> None:
+        if len(self.points) < 2:
+            raise ValueError("a line needs at least 2 points")
+
+
+@dataclass(frozen=True)
+class Note:
+    """One line of text with a leader and an arrowhead pointing at `point`; `offset` places the text."""
+
+    point: Point
+    label: str = ""
+    offset: Point = (0.0, 0.0)
+
+
+Annotation = Dimension | Level | Line | Note
 
 
 @dataclass(frozen=True)
@@ -140,18 +160,26 @@ ABOUT = {
         "from the points"
     ),
     "levels": "point is the marked spot; label is its height text; offset only moves the drawn symbol",
-    "ids": "A, B, C, ... name the dimensions and L1, L2, ... the levels, as tagged on the image when ids are shown",
+    "lines": "plain polylines through points, without meaning beyond what the picture shows",
+    "notes": "free text pointing at point (the arrowhead); the text sits at point + offset",
+    "ids": (
+        "A, B, C, ... name the dimensions, L1, ... the levels, N1, ... the lines and T1, ... the notes, "
+        "as tagged on the image when ids are shown"
+    ),
     "labels": "free text typed by a person; Dimensio does not measure anything",
 }
 
 
 def annotation_ids(items) -> list[str]:
-    """Names in drawing order: dimensions A, B, …, Z, AA, AB, …; levels L1, L2, …"""
-    names, letters, levels = [], 0, 0
+    """Names in drawing order: dimensions A, B, …, Z, AA, AB, …; levels L1, …; lines N1, …; notes T1, …"""
+    names, letters = [], 0
+    counts = {"L": 0, "N": 0, "T": 0}
+    prefixes = {Level: "L", Line: "N", Note: "T"}
     for item in items:
-        if isinstance(item, Level):
-            levels += 1
-            names.append(f"L{levels}")
+        prefix = prefixes.get(type(item))
+        if prefix is not None:
+            counts[prefix] += 1
+            names.append(f"{prefix}{counts[prefix]}")
             continue
         n, name = letters, ""
         while True:
@@ -181,17 +209,24 @@ def to_json(doc: Document) -> dict:
         "ids": doc.style.ids,
     }
     data["dimensions"] = []
-    levels = []
+    levels, lines, notes = [], [], []
     for d, name in zip(doc.dimensions, annotation_ids(doc.dimensions)):
         if isinstance(d, Level):
             levels.append({"id": name, "point": list(d.point), "label": d.label, "offset": list(d.offset)})
+            continue
+        if isinstance(d, Line):
+            lines.append({"id": name, "points": [list(p) for p in d.points]})
+            continue
+        if isinstance(d, Note):
+            notes.append({"id": name, "point": list(d.point), "label": d.label, "offset": list(d.offset)})
             continue
         entry = {"id": name, "points": [list(p) for p in d.points], "labels": list(d.labels), "offset": list(d.offset)}
         if any(d.angles):  # only stored when something was typed
             entry["angles"] = list(d.angles)
         data["dimensions"].append(entry)
-    if levels:
-        data["levels"] = levels
+    for key, entries in (("levels", levels), ("lines", lines), ("notes", notes)):
+        if entries:
+            data[key] = entries
     return data
 
 
@@ -240,6 +275,10 @@ def from_json(data: object) -> Document:
         ]
         dimensions += [
             Level(_point(v["point"]), str(v["label"]), _point(v["offset"])) for v in data.get("levels", [])
+        ]
+        dimensions += [Line(tuple(_point(p) for p in v["points"])) for v in data.get("lines", [])]
+        dimensions += [
+            Note(_point(v["point"]), str(v["label"]), _point(v["offset"])) for v in data.get("notes", [])
         ]
         image = None
         if "image" in data:

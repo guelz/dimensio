@@ -298,3 +298,11 @@ def test_cli_prints_the_data_an_exported_image_carries(win, tmp_path, capsys):
     assert main(["--data", str(photo)]) == 0  # the original: falls back to its sidecar
     assert json.loads(capsys.readouterr().out)["dimensions"][0]["id"] == "A"
     assert main(["--data", str(tmp_path / "nothing.png")]) == 1
+
+
+def test_number_keys_pick_all_four_tools(win, tmp_path):
+    win.open_file(make_image(tmp_path / "a.png"))
+    for action, tool in ((win.line_action, "line"), (win.note_action, "note"), (win.level_action, "level"), (win.dimension_action, "dimension")):
+        action.trigger()
+        assert win.canvas.tool == tool
+    assert "4" in [s.toString() for s in win.note_action.shortcuts()]

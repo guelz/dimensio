@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from .model import Dimension, Level, Point
+from .model import Dimension, Level, Note, Point
 
 ARROW_HALF_ANGLE = math.radians(15)
 ANGLE_RADIUS_LEG = 0.4  # arc radius as a share of the shorter leg ...
@@ -99,6 +99,26 @@ def level_layout(level: Level, line_width: float, text_size: float) -> LevelLayo
         text_anchor=(tx + half + gap, ty - gap),
         label=level.label,
     )
+
+
+@dataclass(frozen=True)
+class NoteLayout:
+    spot: Point  # what the note points at
+    attach: Point  # spot + offset: where the leader meets the text's underline
+    arrow: Triangle | None  # at the spot, pointing at it; None while the text sits on the spot
+    text_right: bool  # text runs right from `attach` (offset to the right) or ends there (offset to the left)
+    gap: float  # between the underline and the text
+    label: str
+
+
+def note_layout(note: Note, line_width: float, text_size: float) -> NoteLayout:
+    dx, dy = note.offset
+    attach = (note.point[0] + dx, note.point[1] + dy)
+    arrow = None
+    if math.hypot(dx, dy) > 1e-9:
+        ux, uy = _unit(note.point, attach)
+        arrow = _arrow(note.point, ux, uy, arrow_length(line_width, text_size))
+    return NoteLayout(note.point, attach, arrow, dx >= 0, text_gap(line_width, text_size), note.label)
 
 
 def _unit(p: Point, q: Point) -> Point:

@@ -45,7 +45,7 @@ from .render import EMBED_KEY, ImageLoadError, load_image, read_embedded, save_i
 IMAGE_FILTER = "Images (*.jpg *.jpeg *.png *.webp *.tif *.tiff *.bmp *.heic *.heif *.avif);;All files (*)"
 SAVE_FILTER = "PNG image (*.png);;JPEG image (*.jpg *.jpeg)"
 HINT = (
-    "D: dimension · L: level · Click, click, type · Ctrl+click: chain · Shift: straight · Esc: cancel · "
+    "1-4: dimension, level, line, note · Click, click, type · Ctrl+click: chain · Shift: straight · Esc: cancel · "
     "Double-click label: edit · "
     "Ctrl+scroll: zoom · Middle or Space+drag: pan · Ctrl+0: fit · Ctrl+Z / Ctrl+Shift+Z: undo / redo"
 )
@@ -93,12 +93,20 @@ class MainWindow(QMainWindow):
         self._action("&Fit to window", "Ctrl+0", self.canvas.fit, "zoom-fit-best")
         self._action("&Quit", QKeySequence.StandardKey.Quit, self.close)
         self.tools = QActionGroup(self)
-        self.dimension_action = self._action("&Dimension", "D", lambda: self.canvas.set_tool("dimension"))
-        self.level_action = self._action("&Level", "L", lambda: self.canvas.set_tool("level"))
-        for action, tip in ((self.dimension_action, "Click two points (Ctrl+click for a chain), then type"),
-                            (self.level_action, "Click a spot, type its height (±0.00, +1.25 m …)")):
+        self.dimension_action = self._action("&Dimension", "1", lambda: self.canvas.set_tool("dimension"))
+        self.level_action = self._action("&Level", "2", lambda: self.canvas.set_tool("level"))
+        self.line_action = self._action("L&ine", "3", lambda: self.canvas.set_tool("line"))
+        self.note_action = self._action("&Note", "4", lambda: self.canvas.set_tool("note"))
+        for action, letter, tip in (
+            (self.dimension_action, "D", "Click two points (Ctrl+click for a chain), then type"),
+            (self.level_action, "L", "Click a spot, type its height (±0.00, +1.25 m …)"),
+            (self.line_action, None, "Click two points (Ctrl+click for more), a plain line"),
+            (self.note_action, "T", "Click what you mean, type a note; drag the text where it fits"),
+        ):
+            if letter:
+                action.setShortcuts([action.shortcut(), QKeySequence(letter)])
             action.setCheckable(True)
-            action.setToolTip(f"{tip} — {action.shortcut().toString()}")
+            action.setToolTip(f"{tip} — {' / '.join(s.toString() for s in action.shortcuts())}")
             self.tools.addAction(action)
         self.dimension_action.setChecked(True)
         self.undo_action.setEnabled(False)
@@ -121,8 +129,8 @@ class MainWindow(QMainWindow):
         for action in (self.open_action, self.save_action, self.copy_action):
             bar.addAction(action)
         bar.addSeparator()
-        bar.addAction(self.dimension_action)
-        bar.addAction(self.level_action)
+        for action in (self.dimension_action, self.level_action, self.line_action, self.note_action):
+            bar.addAction(action)
         bar.addSeparator()
         bar.addWidget(QLabel(" Line width "))
         self.width_box = self._spin(1, 500)

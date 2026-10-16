@@ -375,3 +375,40 @@ def test_id_tags_follow_the_drawing_order(canvas, qtbot):
     canvas.undo.undo()
     canvas.undo.undo()
     assert [item.tag for item in canvas.dimension_items()] == ["", ""]
+
+
+def test_line_tool_draws_without_asking_for_labels(canvas):
+    from dimensio.model import Line
+
+    canvas.set_tool("line")
+    click(canvas, 50, 250)
+    click(canvas, 150, 200, CTRL)
+    click(canvas, 250, 250)
+    assert canvas.label_editor() is None
+    [line] = canvas.doc.dimensions
+    assert isinstance(line, Line) and len(line.points) == 3
+    assert canvas.undo.count() == 1
+    drag(canvas, (100, 225), (100, 175))  # dragging moves the whole line
+    [moved] = canvas.doc.dimensions
+    assert [p[1] for p in moved.points] == pytest.approx([p[1] - 50 for p in line.points], abs=1.0)
+
+
+def test_note_tool_points_at_a_spot_and_takes_one_line(canvas, qtbot):
+    from dimensio.model import Note
+
+    canvas.set_tool("note")
+    click(canvas, 100, 250)
+    editor = canvas.label_editor()
+    assert editor.prefix() == "✎"
+    qtbot.keyClicks(editor, "drain pipe")
+    qtbot.keyClick(editor, Qt.Key.Key_Return)
+    [note] = canvas.doc.dimensions
+    assert isinstance(note, Note) and note.label == "drain pipe"
+    assert note.point == pytest.approx((100, 250), abs=1.0)
+
+
+def test_empty_note_is_discarded(canvas, qtbot):
+    canvas.set_tool("note")
+    click(canvas, 100, 250)
+    qtbot.keyClick(canvas.label_editor(), Qt.Key.Key_Return)
+    assert canvas.doc.dimensions == [] and canvas.undo.count() == 0

@@ -21,8 +21,8 @@ from PySide6.QtGui import (
     QTransform,
 )
 
-from .geometry import Layout, LevelLayout, layout, level_layout
-from .model import Annotation, Dimension, Document, Level, Style, annotation_ids
+from .geometry import Layout, LevelLayout, NoteLayout, layout, level_layout, note_layout
+from .model import Annotation, Dimension, Document, Level, Line, Note, Style, annotation_ids
 
 ALLOCATION_LIMIT_MB = 1024  # Qt's default of 256 MB refuses photos above ~64 MP
 EMBED_KEY = "dimensio"  # PNG text chunk holding the sidecar JSON in exported images
@@ -84,7 +84,7 @@ class DimensionPaths:
     strokes: QPainterPath  # centre lines (dimension and extension lines), stroked with the line width
     fills: QPainterPath  # arrowheads and label glyphs, filled
     label_boxes: list[QPolygonF]  # one rotated box per segment label, for hit tests and the editor
-    layout: Layout | LevelLayout
+    layout: Layout | LevelLayout | NoteLayout | None  # None for plain lines
     angle_boxes: list[QPolygonF | None] = field(default_factory=list)  # per corner; None = no angle text
 
 
@@ -92,7 +92,48 @@ def build_paths(item: Annotation, style: Style, tag: str = "") -> DimensionPaths
     """`tag` is the item's name (A, L1, …) drawn in a small box next to its first label; "" for none."""
     if isinstance(item, Level):
         return _level_paths(item, style, tag)
+    if isinstance(item, Line):
+        return _line_paths(item, style, tag)
+    if isinstance(item, Note):
+        return _note_paths(item, style, tag)
     return _dimension_paths(item, style, tag)
+
+
+def _line_paths(line: Line, style: Style, tag: str = "") -> DimensionPaths:
+    strokes, fills = QPainterPath(), QPainterPath()
+    strokes.moveTo(*line.points[0])
+    for p in line.points[1:]:
+        strokes.lineTo(*p)
+    if tag:
+        (x0, y0), (x1, y1) = line.points[0], line.points[1]
+        transform = QTransform()
+        transform.translate((x0 + x1) / 2, (y0 + y1) / 2)
+        _add_tag(strokes, fills, tag, style, transform, 0.0, -0.6 * style.text_size, 0)
+    return DimensionPaths(strokes, fills, [], None)
+
+
+def _note_paths(note: Note, style: Style, tag: str = "") -> DimensionPaths:
+    lay = note_layout(note, style.line_width, style.text_size)
+    font = label_font(style.text_size)
+    metrics = QFontMetricsF(font)
+    width = max(metrics.horizontalAdvance(lay.label), style.text_size)
+    ax, ay = lay.attach
+    left = ax if lay.text_right else ax - width
+    strokes, fills = QPainterPath(), QPainterPath()
+    strokes.moveTo(*lay.spot)
+    strokes.lineTo(ax, ay)
+    strokes.lineTo(ax + width if lay.text_right else ax - width, ay)  # underline the text sits on
+    if lay.arrow is not None:
+        fills.addPolygon(QPolygonF([QPointF(*p) for p in lay.arrow]))
+        fills.closeSubpath()
+    bottom = ay - lay.gap
+    if lay.label:
+        fills.addText(left, bottom - metrics.descent(), font, lay.label)
+    box = QPolygonF(QRectF(left, bottom - metrics.height(), width, metrics.height()))
+    if tag:
+        _add_tag(strokes, fills, tag, style, QTransform(), left + width if lay.text_right else left,
+                 bottom - metrics.height() / 2, +1 if lay.text_right else -1)
+    return DimensionPaths(strokes, fills, [box], lay)
 
 
 def _add_tag(strokes: QPainterPath, fills: QPainterPath, tag: str, style: Style, transform: QTransform, center_x: float, center_y: float, side: int) -> None:
