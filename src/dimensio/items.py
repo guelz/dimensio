@@ -121,6 +121,19 @@ class EditableItem(PathsItem):
 
     # ----- shared behaviour -----
 
+    def set_active(self, active: bool) -> None:
+        """Only items of the active tool's kind react to the mouse; the others are click-through."""
+        self.setAcceptedMouseButtons(Qt.MouseButton.AllButtons if active else Qt.MouseButton.NoButton)
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, active)
+        if active:
+            self.setCursor(Qt.CursorShape.SizeAllCursor)
+        else:
+            self.setSelected(False)
+            self.unsetCursor()
+
+    def is_active(self) -> bool:
+        return self.acceptedMouseButtons() != Qt.MouseButton.NoButton
+
     def set_dimension(self, dim: Annotation, style: Style | None = None) -> None:
         super().set_dimension(dim, style)
         self._place_handles()
@@ -339,6 +352,7 @@ class NoteItem(EditableItem):
 
 
 _ITEM_TYPES = {Level: LevelItem, Line: LineItem, Note: NoteItem}
+TOOL_OF = {Dimension: "dimension", Level: "level", Line: "line", Note: "note"}  # the tool that edits each kind
 
 
 def make_item(canvas: Canvas, dim: Annotation, style: Style) -> EditableItem:

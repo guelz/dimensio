@@ -412,3 +412,29 @@ def test_empty_note_is_discarded(canvas, qtbot):
     click(canvas, 100, 250)
     qtbot.keyClick(canvas.label_editor(), Qt.Key.Key_Return)
     assert canvas.doc.dimensions == [] and canvas.undo.count() == 0
+
+
+def test_other_kinds_are_click_through_for_the_active_tool(canvas, qtbot):
+    from dimensio.model import Level, Line
+
+    line = Line(((50.0, 150.0), (350.0, 150.0)))
+    canvas.set_document(blank(), Document(style=STYLE, dimensions=[line]))
+    click(canvas, 100, 150)  # dimension tool: starts a dimension on top of the line
+    click(canvas, 300, 150)
+    qtbot.keyClick(canvas.label_editor(), Qt.Key.Key_Return)
+    assert canvas.doc.dimensions[0] == line and isinstance(canvas.doc.dimensions[1], Dimension)
+    canvas.set_tool("level")
+    click(canvas, 200, 150)  # level tool: neither the line nor the dimension grabs the click
+    qtbot.keyClick(canvas.label_editor(), Qt.Key.Key_Escape)
+    assert canvas.doc.dimensions[0] == line and len(canvas.doc.dimensions) == 2
+    canvas.set_tool("line")
+    drag(canvas, (60, 150), (60, 120))  # line tool: the line is yours again
+    assert canvas.doc.dimensions[0] != line
+
+
+def test_switching_tools_drops_the_selection_of_other_kinds(canvas):
+    with_dimension(canvas, Dimension(((50.0, 150.0), (350.0, 150.0)), ("a",), (0.0, -60.0)))
+    click(canvas, 200, 90)
+    assert canvas.dimension_items()[0].isSelected()
+    canvas.set_tool("line")
+    assert not canvas.dimension_items()[0].isSelected()

@@ -50,7 +50,7 @@ pipx install --system-site-packages git+https://github.com/guelz/dimensio
 | Do | How |
 |---|---|
 | Open | `dimensio photo.jpg`, Open With, drag and drop, Ctrl+O, or paste (Ctrl+V) |
-| Tool | **1**/**D** dimension, **2**/**L** level marker, **3** line, **4**/**T** note (toolbar) |
+| Tool | **1**/**D** dimension, **2**/**L** level marker, **3** line, **4**/**T** note (toolbar). Each tool is its own layer: it only selects, moves and edits its own kind, and clicks go straight through everything else |
 | Dimension | click A, click B, type the label, Enter |
 | Chain | Ctrl+click every point but the last; Enter/Tab walks the labels, Shift+Tab goes back |
 | Angle | in a chain, Tab walks length → angle at the corner → length …; leave an angle empty to skip it |
@@ -58,7 +58,7 @@ pipx install --system-site-packages git+https://github.com/guelz/dimensio
 | Line | click, Ctrl+click for more points, click to finish; drag to move it |
 | Note | click what you mean, type one line, Enter; drag the text where it fits |
 | Straight | hold Shift for horizontal or vertical |
-| Move | drag the line; drag a point's handle (select the dimension first) |
+| Move | with the matching tool active: drag it; drag a point's handle (select it first) |
 | Edit text | double-click the label |
 | Delete | select, Delete |
 | Undo / redo | Ctrl+Z / Ctrl+Shift+Z |

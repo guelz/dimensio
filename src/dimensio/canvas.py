@@ -10,7 +10,7 @@ from PySide6.QtGui import QColor, QImage, QPainter, QPalette, QPixmap, QUndoStac
 from PySide6.QtWidgets import QGraphicsScene, QGraphicsView, QLineEdit, QWidget
 
 from .commands import AddDimension, ChangeDimension, ChangeStyle, RemoveDimension
-from .items import EditableItem, HandleItem, PathsItem, make_item
+from .items import TOOL_OF, EditableItem, HandleItem, PathsItem, make_item
 from .model import Annotation, Dimension, Document, Level, Line, Note, Point, Style, annotation_ids
 from .render import export_image
 
@@ -130,6 +130,7 @@ class Canvas(QGraphicsView):
         self.scene().setSceneRect(QRectF(image.rect()))
         for dim in doc.dimensions:
             item = make_item(self, dim, doc.style)
+            self._activate(item)
             self.scene().addItem(item)
             self._items.append(item)
         self._refresh_tags()
@@ -141,6 +142,11 @@ class Canvas(QGraphicsView):
         """'dimension' / 'line': click, (Ctrl+)click (, type). 'level' / 'note': one click, then type."""
         self.finish_interaction()
         self.tool = tool
+        for item in self._items:
+            self._activate(item)
+
+    def _activate(self, item: EditableItem) -> None:
+        item.set_active(TOOL_OF[type(item.dim)] == self.tool)
 
     def has_image(self) -> bool:
         return self.image is not None
@@ -162,6 +168,7 @@ class Canvas(QGraphicsView):
         self.doc.dimensions.insert(index, dim)
         item = make_item(self, dim, self.doc.style)
         item.set_hit_tolerance(self._scene_tolerance())
+        self._activate(item)
         self.scene().addItem(item)
         self._items.insert(index, item)
         self._refresh_tags()
@@ -322,7 +329,8 @@ class Canvas(QGraphicsView):
 
     def _grabbable_item_at(self, event):
         for item in self.items(event.position().toPoint()):
-            if isinstance(item, (EditableItem, HandleItem)) and item.isVisible():
+            owner = item.parentItem() if isinstance(item, HandleItem) else item
+            if isinstance(owner, EditableItem) and item.isVisible() and owner.is_active():
                 return item
         return None
 

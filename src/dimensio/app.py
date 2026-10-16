@@ -45,7 +45,7 @@ from .render import EMBED_KEY, ImageLoadError, load_image, read_embedded, save_i
 IMAGE_FILTER = "Images (*.jpg *.jpeg *.png *.webp *.tif *.tiff *.bmp *.heic *.heif *.avif);;All files (*)"
 SAVE_FILTER = "PNG image (*.png);;JPEG image (*.jpg *.jpeg)"
 HINT = (
-    "1-4: dimension, level, line, note · Click, click, type · Ctrl+click: chain · Shift: straight · Esc: cancel · "
+    "1-4: dimension, level, line, note (each edits only its own kind) · Click, click, type · Ctrl+click: chain · Shift: straight · Esc: cancel · "
     "Double-click label: edit · "
     "Ctrl+scroll: zoom · Middle or Space+drag: pan · Ctrl+0: fit · Ctrl+Z / Ctrl+Shift+Z: undo / redo"
 )
