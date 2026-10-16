@@ -34,6 +34,7 @@ class Style:
     text_size: float
     color: str = DEFAULT_COLOR
     outline: bool = True  # contrasting halo under lines and text
+    ids: bool = False  # draw the A, B, … / L1, … names next to the labels
 
     @classmethod
     def for_image(cls, width: int, height: int, color: str = DEFAULT_COLOR) -> Style:
@@ -130,8 +131,41 @@ def find_original(path: Path) -> Path | None:
     return None
 
 
+ABOUT = {
+    "generator": "Dimensio, https://github.com/guelz/dimensio",
+    "coordinates": "image pixels of the (EXIF-oriented) image: origin top-left, x to the right, y down",
+    "dimensions": (
+        "points are the measured points in order; labels[i] is the text for the segment points[i] -> points[i+1]; "
+        "angles[j], if present, is the text for the corner at points[j+1]; offset only moves the drawn line away "
+        "from the points"
+    ),
+    "levels": "point is the marked spot; label is its height text; offset only moves the drawn symbol",
+    "ids": "A, B, C, ... name the dimensions and L1, L2, ... the levels, as tagged on the image when ids are shown",
+    "labels": "free text typed by a person; Dimensio does not measure anything",
+}
+
+
+def annotation_ids(items) -> list[str]:
+    """Names in drawing order: dimensions A, B, …, Z, AA, AB, …; levels L1, L2, …"""
+    names, letters, levels = [], 0, 0
+    for item in items:
+        if isinstance(item, Level):
+            levels += 1
+            names.append(f"L{levels}")
+            continue
+        n, name = letters, ""
+        while True:
+            name = chr(ord("A") + n % 26) + name
+            n = n // 26 - 1
+            if n < 0:
+                break
+        names.append(name)
+        letters += 1
+    return names
+
+
 def to_json(doc: Document) -> dict:
-    data: dict = {"version": SIDECAR_VERSION}
+    data: dict = {"version": SIDECAR_VERSION, "about": ABOUT}
     if doc.image is not None:
         data["image"] = {
             "file": doc.image.file,
@@ -144,14 +178,15 @@ def to_json(doc: Document) -> dict:
         "text_size": doc.style.text_size,
         "color": doc.style.color,
         "outline": doc.style.outline,
+        "ids": doc.style.ids,
     }
     data["dimensions"] = []
     levels = []
-    for d in doc.dimensions:
+    for d, name in zip(doc.dimensions, annotation_ids(doc.dimensions)):
         if isinstance(d, Level):
-            levels.append({"point": list(d.point), "label": d.label, "offset": list(d.offset)})
+            levels.append({"id": name, "point": list(d.point), "label": d.label, "offset": list(d.offset)})
             continue
-        entry = {"points": [list(p) for p in d.points], "labels": list(d.labels), "offset": list(d.offset)}
+        entry = {"id": name, "points": [list(p) for p in d.points], "labels": list(d.labels), "offset": list(d.offset)}
         if any(d.angles):  # only stored when something was typed
             entry["angles"] = list(d.angles)
         data["dimensions"].append(entry)
@@ -190,9 +225,10 @@ def from_json(data: object) -> Document:
         if not is_hex_color(color):
             raise ValueError(f"bad color {color!r}")
         outline = style_data.get("outline", True)
-        if not isinstance(outline, bool):
-            raise ValueError(f"bad outline {outline!r}")
-        style = Style(_positive(style_data["line_width"]), _positive(style_data["text_size"]), color, outline)
+        ids = style_data.get("ids", False)
+        if not isinstance(outline, bool) or not isinstance(ids, bool):
+            raise ValueError(f"bad outline/ids {outline!r}/{ids!r}")
+        style = Style(_positive(style_data["line_width"]), _positive(style_data["text_size"]), color, outline, ids)
         dimensions = [
             Dimension(
                 tuple(_point(p) for p in d["points"]),
@@ -214,10 +250,24 @@ def from_json(data: object) -> Document:
     return Document(style=style, dimensions=dimensions, image=image)
 
 
+def to_json_text(doc: Document) -> str:
+    return json.dumps(to_json(doc), indent=2, ensure_ascii=False) + "\n"
+
+
+def original_from_data(path: Path, data: dict | None) -> Path | None:
+    """The original photo named in data embedded in an exported image, if it sits next to it."""
+    image = data.get("image") if isinstance(data, dict) else None
+    name = image.get("file") if isinstance(image, dict) else None
+    if not isinstance(name, str) or not name or name != Path(name).name or name in (".", ".."):
+        return None
+    candidate = path.with_name(name)
+    return candidate if candidate.is_file() and candidate != path else None
+
+
 def save_sidecar(doc: Document, path: Path) -> None:
     """Write atomically: a crash never leaves a half-written sidecar behind."""
     tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(json.dumps(to_json(doc), indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    tmp.write_text(to_json_text(doc), encoding="utf-8")
     os.replace(tmp, path)
 
 

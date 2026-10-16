@@ -230,3 +230,33 @@ def test_levels_round_trip_next_to_dimensions(tmp_path):
 def test_sidecar_without_levels_still_loads():
     data = {"version": 1, "style": {"line_width": 2, "text_size": 10, "color": "#FFC400"}, "dimensions": []}
     assert from_json(data).dimensions == []
+
+
+def test_ids_letters_for_dimensions_numbers_for_levels():
+    from dimensio.model import Level, annotation_ids
+
+    d = Dimension(((0.0, 0.0), (1.0, 0.0)), ("a",))
+    lv = Level((0.0, 0.0), "x")
+    assert annotation_ids([d, lv, d, lv]) == ["A", "L1", "B", "L2"]
+    assert annotation_ids([d] * 28)[-2:] == ["AA", "AB"]
+
+
+def test_sidecar_explains_itself_and_names_every_item(tmp_path):
+    import json
+
+    from dimensio.model import Level
+
+    doc = Document(Style(2, 10), [Dimension(((0.0, 0.0), (1.0, 0.0)), ("a",)), Level((5.0, 6.0), "+1")])
+    path = tmp_path / "x.dims.json"
+    save_sidecar(doc, path)
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert "pixels" in data["about"]["coordinates"]
+    assert data["dimensions"][0]["id"] == "A" and data["levels"][0]["id"] == "L1"
+    assert load_sidecar(path) == doc  # ids and about are output only
+
+
+def test_ids_style_round_trips(tmp_path):
+    doc = Document(Style(2, 10, ids=True))
+    path = tmp_path / "x.dims.json"
+    save_sidecar(doc, path)
+    assert load_sidecar(path).style.ids is True

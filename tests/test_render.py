@@ -157,3 +157,11 @@ def test_level_marker_is_half_filled(qapp):
     y = round(left[1] + (tip[1] - left[1]) * 0.4)  # a bit below the triangle's top edge
     assert is_red(out.pixelColor(round(tip[0] - 8), y))  # left half filled
     assert is_white(out.pixelColor(round(tip[0] + 8), y))  # right half open
+
+
+def test_id_tags_are_drawn_only_when_switched_on(qapp):
+    dim = Dimension(((50.0, 150.0), (350.0, 150.0)), ("ABC",), (0.0, -60.0))
+    plain = export_image(blank(), Document(style=STYLE, dimensions=[dim]))
+    tagged = export_image(blank(), Document(style=Style(4, 20, "#FF0000", ids=True), dimensions=[dim]))
+    assert plain != tagged
+    assert export_image(blank(), Document(style=STYLE, dimensions=[dim])) == plain

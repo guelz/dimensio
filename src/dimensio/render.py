@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -21,9 +22,10 @@ from PySide6.QtGui import (
 )
 
 from .geometry import Layout, LevelLayout, layout, level_layout
-from .model import Annotation, Dimension, Document, Level, Style
+from .model import Annotation, Dimension, Document, Level, Style, annotation_ids
 
 ALLOCATION_LIMIT_MB = 1024  # Qt's default of 256 MB refuses photos above ~64 MP
+EMBED_KEY = "dimensio"  # PNG text chunk holding the sidecar JSON in exported images
 
 
 class ImageLoadError(Exception):
@@ -47,6 +49,18 @@ def save_image(image: QImage, path: Path) -> None:
         ok = image.save(str(path), "PNG")
     if not ok:
         raise OSError(f"could not write {path}")
+
+
+def read_embedded(path: Path) -> dict | None:
+    """The Dimensio data an exported image carries, without decoding its pixels."""
+    text = QImageReader(str(path)).text(EMBED_KEY)
+    if not text:
+        return None
+    try:
+        data = json.loads(text)
+    except ValueError:
+        return None
+    return data if isinstance(data, dict) else None
 
 
 def halo_width(line_width: float) -> float:
@@ -74,13 +88,29 @@ class DimensionPaths:
     angle_boxes: list[QPolygonF | None] = field(default_factory=list)  # per corner; None = no angle text
 
 
-def build_paths(item: Annotation, style: Style) -> DimensionPaths:
+def build_paths(item: Annotation, style: Style, tag: str = "") -> DimensionPaths:
+    """`tag` is the item's name (A, L1, …) drawn in a small box next to its first label; "" for none."""
     if isinstance(item, Level):
-        return _level_paths(item, style)
-    return _dimension_paths(item, style)
+        return _level_paths(item, style, tag)
+    return _dimension_paths(item, style, tag)
 
 
-def _level_paths(level: Level, style: Style) -> DimensionPaths:
+def _add_tag(strokes: QPainterPath, fills: QPainterPath, tag: str, style: Style, transform: QTransform, center_x: float, center_y: float, side: int) -> None:
+    """Rounded box with the tag, beside a label. `side` -1 puts it left of (center_x), +1 right of it."""
+    font = label_font(0.6 * style.text_size)
+    metrics = QFontMetricsF(font)
+    height = 0.9 * style.text_size
+    width = max(height, metrics.horizontalAdvance(tag) + 0.4 * style.text_size)
+    cx = center_x + side * (0.3 * style.text_size + width / 2)
+    box = QPainterPath()
+    box.addRoundedRect(QRectF(cx - width / 2, center_y - height / 2, width, height), height / 2, height / 2)
+    strokes.addPath(transform.map(box))
+    text = QPainterPath()
+    text.addText(cx - metrics.horizontalAdvance(tag) / 2, center_y + (metrics.ascent() - metrics.descent()) / 2, font, tag)
+    fills.addPath(transform.map(text))
+
+
+def _level_paths(level: Level, style: Style, tag: str = "") -> DimensionPaths:
     lay = level_layout(level, style.line_width, style.text_size)
     font = label_font(style.text_size)
     metrics = QFontMetricsF(font)
@@ -103,10 +133,12 @@ def _level_paths(level: Level, style: Style) -> DimensionPaths:
     box = QPolygonF(QRectF(x, y - metrics.height(), max(width, style.text_size), metrics.height()))
     if lay.label:
         fills.addText(x, y - metrics.descent(), font, lay.label)
+    if tag:
+        _add_tag(strokes, fills, tag, style, QTransform(), x + width, y - metrics.height() / 2, +1)
     return DimensionPaths(strokes, fills, [box], lay)
 
 
-def _dimension_paths(dim: Dimension, style: Style) -> DimensionPaths:
+def _dimension_paths(dim: Dimension, style: Style, tag: str = "") -> DimensionPaths:
     lay = layout(dim, style.line_width, style.text_size)
     strokes = QPainterPath()
     fills = QPainterPath()
@@ -134,6 +166,8 @@ def _dimension_paths(dim: Dimension, style: Style) -> DimensionPaths:
             text = QPainterPath()
             text.addText(-width / 2, -metrics.descent(), font, seg.label)
             fills.addPath(transform.map(text))
+        if tag and seg is lay.segments[0]:
+            _add_tag(strokes, fills, tag, style, transform, -box_width / 2, -metrics.height() / 2, -1)
 
     angle_boxes: list[QPolygonF | None] = []
     for arc in lay.angles:
@@ -180,7 +214,8 @@ def paint_dimension(painter: QPainter, paths: DimensionPaths, style: Style) -> N
 def export_image(image: QImage, doc: Document) -> QImage:
     out = image.convertToFormat(QImage.Format.Format_ARGB32_Premultiplied)
     painter = QPainter(out)
-    for dim in doc.dimensions:
-        paint_dimension(painter, build_paths(dim, doc.style), doc.style)
+    tags = annotation_ids(doc.dimensions) if doc.style.ids else [""] * len(doc.dimensions)
+    for dim, tag in zip(doc.dimensions, tags):
+        paint_dimension(painter, build_paths(dim, doc.style, tag), doc.style)
     painter.end()
     return out

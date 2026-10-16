@@ -38,6 +38,7 @@ class PathsItem(QGraphicsItem):
         super().__init__()
         self._dim = dim
         self._style = style
+        self.tag = ""  # name drawn next to the first label when IDs are shown
         self._paths = build_paths(dim, style)
         self._margin = 0.0
 
@@ -54,8 +55,13 @@ class PathsItem(QGraphicsItem):
         self._dim = dim
         if style is not None:
             self._style = style
-        self._paths = build_paths(dim, self._style)
+        self._paths = build_paths(dim, self._style, self.tag)
         self.update()
+
+    def set_tag(self, tag: str) -> None:
+        if tag != self.tag:
+            self.tag = tag
+            self.set_dimension(self._dim)
 
     def _boxes(self) -> list:
         return self._paths.label_boxes + [b for b in self._paths.angle_boxes if b is not None]

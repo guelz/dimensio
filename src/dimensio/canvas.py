@@ -11,7 +11,7 @@ from PySide6.QtWidgets import QGraphicsScene, QGraphicsView, QLineEdit, QWidget
 
 from .commands import AddDimension, ChangeDimension, ChangeStyle, RemoveDimension
 from .items import EditableItem, HandleItem, PathsItem, make_item
-from .model import Annotation, Dimension, Document, Level, Point, Style
+from .model import Annotation, Dimension, Document, Level, Point, Style, annotation_ids
 from .render import export_image
 
 HIT_TOLERANCE = 6  # screen pixels around a dimension line that still grab it
@@ -130,6 +130,7 @@ class Canvas(QGraphicsView):
             item = make_item(self, dim, doc.style)
             self.scene().addItem(item)
             self._items.append(item)
+        self._refresh_tags()
         self.undo.clear()
         self.fit()
         self.style_changed.emit(doc.style)
@@ -161,10 +162,12 @@ class Canvas(QGraphicsView):
         item.set_hit_tolerance(self._scene_tolerance())
         self.scene().addItem(item)
         self._items.insert(index, item)
+        self._refresh_tags()
 
     def remove_dimension(self, index: int) -> None:
         del self.doc.dimensions[index]
         self.scene().removeItem(self._items.pop(index))
+        self._refresh_tags()
 
     def replace_dimension(self, index: int, dim: Annotation) -> None:
         self.doc.dimensions[index] = dim
@@ -174,7 +177,14 @@ class Canvas(QGraphicsView):
         self.doc.style = style
         for item in self._items:
             item.set_dimension(item.dim, style)
+        self._refresh_tags()
         self.style_changed.emit(style)
+
+    def _refresh_tags(self) -> None:
+        """IDs follow the drawing order, so every insert, delete or style change re-tags."""
+        names = annotation_ids(self.doc.dimensions) if self.doc.style.ids else [""] * len(self._items)
+        for item, name in zip(self._items, names):
+            item.set_tag(name)
 
     def commit_edit(self, item: EditableItem, before: Annotation, text: str) -> None:
         """Record a finished drag of `item` (already showing its new state) as one undo step."""

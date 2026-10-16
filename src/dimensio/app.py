@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from dataclasses import replace
 from pathlib import Path
@@ -30,13 +31,16 @@ from .model import (
     SidecarError,
     Style,
     find_original,
+    from_json,
     is_hex_color,
+    original_from_data,
     load_sidecar,
     output_path,
     save_sidecar,
     sidecar_path,
+    to_json_text,
 )
-from .render import ImageLoadError, load_image, save_image
+from .render import EMBED_KEY, ImageLoadError, load_image, read_embedded, save_image
 
 IMAGE_FILTER = "Images (*.jpg *.jpeg *.png *.webp *.tif *.tiff *.bmp *.heic *.heif *.avif);;All files (*)"
 SAVE_FILTER = "PNG image (*.png);;JPEG image (*.jpg *.jpeg)"
@@ -136,9 +140,13 @@ class MainWindow(QMainWindow):
         self.outline_box.setToolTip("Contrasting outline around lines and text; switch off for very thin lines")
         self.outline_box.toggled.connect(self._on_outline_input)
         bar.addWidget(self.outline_box)
+        self.ids_box = QCheckBox("IDs")
+        self.ids_box.setToolTip("Name every dimension (A, B, …) and level (L1, …) in the picture, to refer to them in text")
+        self.ids_box.toggled.connect(self._on_ids_input)
+        bar.addWidget(self.ids_box)
 
     def _set_image_loaded(self, loaded: bool) -> None:
-        for widget in (self.save_action, self.save_as_action, self.copy_action, self.width_box, self.size_box, self.color_button, self.outline_box):
+        for widget in (self.save_action, self.save_as_action, self.copy_action, self.width_box, self.size_box, self.color_button, self.outline_box, self.ids_box):
             widget.setEnabled(loaded)
 
     def _update_title(self) -> None:
@@ -155,9 +163,10 @@ class MainWindow(QMainWindow):
             box.blockSignals(True)
             box.setValue(round(value))
             box.blockSignals(False)
-        self.outline_box.blockSignals(True)
-        self.outline_box.setChecked(style.outline)
-        self.outline_box.blockSignals(False)
+        for box, value in ((self.outline_box, style.outline), (self.ids_box, style.ids)):
+            box.blockSignals(True)
+            box.setChecked(value)
+            box.blockSignals(False)
         swatch = QPixmap(16, 16)
         swatch.fill(QColor(style.color))
         self.color_button.setIcon(QIcon(swatch))
@@ -174,6 +183,12 @@ class MainWindow(QMainWindow):
         if self.canvas.doc is not None:
             self.canvas.set_style(replace(self.canvas.doc.style, outline=checked))
             self.settings.setValue("outline", checked)
+        self.canvas.setFocus()
+
+    def _on_ids_input(self, checked: bool) -> None:
+        if self.canvas.doc is not None:
+            self.canvas.set_style(replace(self.canvas.doc.style, ids=checked))
+            self.settings.setValue("ids", checked)
         self.canvas.setFocus()
 
     def choose_color(self) -> None:
@@ -193,7 +208,8 @@ class MainWindow(QMainWindow):
         """Defaults for a new image, with the colour and outline the user picked last."""
         color = self.settings.value("color", DEFAULT_COLOR)
         outline = self.settings.value("outline", True, type=bool)
-        return replace(Style.for_image(width, height, color if is_hex_color(color) else DEFAULT_COLOR), outline=outline)
+        ids = self.settings.value("ids", False, type=bool)
+        return replace(Style.for_image(width, height, color if is_hex_color(color) else DEFAULT_COLOR), outline=outline, ids=ids)
 
     # ----- files -----
 
@@ -208,6 +224,10 @@ class MainWindow(QMainWindow):
             return False
         path = path.absolute()
         original = find_original(path)
+        embedded = None
+        if original is None:  # an exported image whose sidecar is gone still carries the data
+            embedded = read_embedded(path)
+            original = original_from_data(path, embedded)
         if original is not None:
             path = original
         try:
@@ -219,15 +239,20 @@ class MainWindow(QMainWindow):
         doc = Document(self._new_style(image.width(), image.height()), image=info)
         side = sidecar_path(path)
         keep_sidecar = False
+        saved = None
         if side.exists():
             try:
                 saved = load_sidecar(side)
             except SidecarError as e:
                 keep_sidecar = True
                 self._warn(f"Ignoring {side.name} because it could not be read. It will be left untouched.\n\n{e}")
-            else:
-                if saved.image is None or saved.image.matches(info) or self._ask_load_anyway():
-                    doc = Document(saved.style, saved.dimensions, info)
+        elif embedded is not None:
+            try:
+                saved = from_json(embedded)
+            except SidecarError:
+                saved = None
+        if saved is not None and (saved.image is None or saved.image.matches(info) or self._ask_load_anyway()):
+            doc = Document(saved.style, saved.dimensions, info)
         self.source = path
         self._keep_sidecar = keep_sidecar
         self.canvas.set_document(image, doc)
@@ -282,7 +307,9 @@ class MainWindow(QMainWindow):
         return True
 
     def _write(self, target: Path) -> None:
-        save_image(self.canvas.flattened(), target)
+        image = self.canvas.flattened()
+        image.setText(EMBED_KEY, to_json_text(self.canvas.doc))  # the exported file explains itself
+        save_image(image, target)
         if self.source is not None and self._keep_sidecar:
             self._warn(f"Saved {target.name}. {sidecar_path(self.source).name} was left untouched, so these dimensions are not kept for re-editing.")
         elif self.source is not None:
@@ -367,14 +394,33 @@ class MainWindow(QMainWindow):
             event.ignore()
 
 
+def _print_data(path: Path) -> int:
+    """JSON for scripts and AI assistants: data embedded in an export, else the sidecar next to the image."""
+    data = read_embedded(path) if path.is_file() else None
+    if data is None and sidecar_path(path).is_file():
+        try:
+            data = json.loads(to_json_text(load_sidecar(sidecar_path(path))))
+        except SidecarError as e:
+            print(f"dimensio: {e}", file=sys.stderr)
+            return 1
+    if data is None:
+        print(f"dimensio: no dimension data found for {path}", file=sys.stderr)
+        return 1
+    print(json.dumps(data, indent=2, ensure_ascii=False))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="dimensio", description="Add dimension lines with your own measurements to photos.")
     parser.add_argument("image", nargs="?", type=Path, help="image to open")
     parser.add_argument("--install-desktop", action="store_true", help="add Dimensio to the application menu and 'Open With'")
     parser.add_argument("--uninstall-desktop", action="store_true", help="remove the application menu entry and icon")
+    parser.add_argument("--data", type=Path, metavar="IMAGE", help="print the dimension data of an image as JSON and exit")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     args = parser.parse_args(argv)
 
+    if args.data is not None:
+        return _print_data(args.data)
     if args.install_desktop:
         for path in desktop.install():
             print(f"wrote {path}")

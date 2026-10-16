@@ -359,3 +359,19 @@ def test_escape_discards_a_new_level_marker(canvas, qtbot):
     click(canvas, 200, 200)
     qtbot.keyClick(canvas.label_editor(), Qt.Key.Key_Escape)
     assert canvas.doc.dimensions == []
+
+
+def test_id_tags_follow_the_drawing_order(canvas, qtbot):
+    from dataclasses import replace as dc_replace
+
+    a = Dimension(((50.0, 100.0), (350.0, 100.0)), ("a",))
+    b = Dimension(((50.0, 200.0), (350.0, 200.0)), ("b",))
+    canvas.set_document(blank(), Document(style=STYLE, dimensions=[a, b]))
+    canvas.set_style(dc_replace(STYLE, ids=True))
+    assert [item.tag for item in canvas.dimension_items()] == ["A", "B"]
+    click(canvas, 200, 100)
+    qtbot.keyClick(canvas, Qt.Key.Key_Delete)
+    assert [item.tag for item in canvas.dimension_items()] == ["A"]
+    canvas.undo.undo()
+    canvas.undo.undo()
+    assert [item.tag for item in canvas.dimension_items()] == ["", ""]

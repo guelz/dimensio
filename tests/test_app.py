@@ -253,3 +253,48 @@ def test_tool_picker_switches_the_canvas_tool(win, tmp_path):
     assert win.canvas.tool == "level"
     win.dimension_action.trigger()
     assert win.canvas.tool == "dimension"
+
+
+def test_saved_png_carries_the_data(win, tmp_path):
+    import json
+
+    photo = make_image(tmp_path / "photo.png")
+    win.open_file(photo)
+    add_dimension(win)
+    win.save()
+    data = json.loads(QImage(str(tmp_path / "photo_dims.png")).text("dimensio"))
+    assert data["dimensions"][0]["labels"] == ["1.2 m"] and data["dimensions"][0]["id"] == "A"
+
+
+def test_exported_png_reopens_from_its_own_data_without_the_sidecar(win, tmp_path):
+    photo = make_image(tmp_path / "photo.png")
+    win.open_file(photo)
+    add_dimension(win)
+    win.save()
+    sidecar_path(photo).unlink()
+    win.open_file(tmp_path / "photo_dims.png")
+    assert win.source == photo
+    assert win.canvas.doc.dimensions == [DIM]
+
+
+def test_ids_checkbox_is_undoable_and_remembered(win, tmp_path):
+    win.open_file(make_image(tmp_path / "a.png"))
+    win.ids_box.setChecked(True)
+    assert win.canvas.doc.style.ids is True
+    win.canvas.undo.setClean()
+    win.open_file(make_image(tmp_path / "b.png"))
+    assert win.canvas.doc.style.ids is True and win.ids_box.isChecked()
+
+
+def test_cli_prints_the_data_an_exported_image_carries(win, tmp_path, capsys):
+    import json
+
+    photo = make_image(tmp_path / "photo.png")
+    win.open_file(photo)
+    add_dimension(win)
+    win.save()
+    assert main(["--data", str(tmp_path / "photo_dims.png")]) == 0
+    assert json.loads(capsys.readouterr().out)["dimensions"][0]["labels"] == ["1.2 m"]
+    assert main(["--data", str(photo)]) == 0  # the original: falls back to its sidecar
+    assert json.loads(capsys.readouterr().out)["dimensions"][0]["id"] == "A"
+    assert main(["--data", str(tmp_path / "nothing.png")]) == 1
