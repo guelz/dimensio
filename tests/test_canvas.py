@@ -438,3 +438,15 @@ def test_switching_tools_drops_the_selection_of_other_kinds(canvas):
     assert canvas.dimension_items()[0].isSelected()
     canvas.set_tool("line")
     assert not canvas.dimension_items()[0].isSelected()
+
+
+def test_hidden_layer_disappears_and_its_tool_brings_it_back(canvas):
+    from dataclasses import replace as dc_replace
+
+    from dimensio.model import Line
+
+    canvas.set_document(blank(), Document(style=STYLE, dimensions=[Line(((50.0, 150.0), (350.0, 150.0)))]))
+    canvas.set_style(dc_replace(STYLE, hidden=("line",)))
+    assert not canvas.dimension_items()[0].isVisible()
+    canvas.set_tool("line")
+    assert canvas.doc.style.hidden == () and canvas.dimension_items()[0].isVisible()

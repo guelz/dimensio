@@ -10,8 +10,8 @@ from PySide6.QtGui import QColor, QImage, QPainter, QPalette, QPixmap, QUndoStac
 from PySide6.QtWidgets import QGraphicsScene, QGraphicsView, QLineEdit, QWidget
 
 from .commands import AddDimension, ChangeDimension, ChangeStyle, RemoveDimension
-from .items import TOOL_OF, EditableItem, HandleItem, PathsItem, make_item
-from .model import Annotation, Dimension, Document, Level, Line, Note, Point, Style, annotation_ids
+from .items import EditableItem, HandleItem, PathsItem, make_item
+from .model import Annotation, Dimension, Document, Level, Line, Note, Point, Style, annotation_ids, kind_of
 from .render import export_image
 
 HIT_TOLERANCE = 6  # screen pixels around a dimension line that still grab it
@@ -144,9 +144,12 @@ class Canvas(QGraphicsView):
         self.tool = tool
         for item in self._items:
             self._activate(item)
+        if self.doc is not None and tool in self.doc.style.hidden:  # never draw on an invisible layer
+            self.set_style(replace(self.doc.style, hidden=tuple(k for k in self.doc.style.hidden if k != tool)))
 
     def _activate(self, item: EditableItem) -> None:
-        item.set_active(TOOL_OF[type(item.dim)] == self.tool)
+        item.set_active(kind_of(item.dim) == self.tool)
+        item.setVisible(kind_of(item.dim) not in self.doc.style.hidden)
 
     def has_image(self) -> bool:
         return self.image is not None
@@ -186,6 +189,7 @@ class Canvas(QGraphicsView):
         self.doc.style = style
         for item in self._items:
             item.set_dimension(item.dim, style)
+            self._activate(item)
         self._refresh_tags()
         self.style_changed.emit(style)
 

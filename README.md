@@ -21,7 +21,7 @@ friend, an AI drawing your house model) knows without asking which number belong
 - Plain lines, and one-line notes with an arrow pointing at what you mean ("drain pipe")
 - Text always lies along the line and is never upside down
 - Settings for the whole image: line width, text size, color, outline on/off (off for very thin
-  lines), ID tags on/off
+  lines), ID tags on/off, and which layers (dimensions, levels, lines, notes) are shown
 - Saves a flat `photo_dims.png` to send to people, plus `photo.jpg.dims.json` so you can keep
   editing later — opening either `photo.jpg` or `photo_dims.png` brings the editable lines back
 - Copy the result straight to the clipboard
@@ -61,6 +61,7 @@ pipx install --system-site-packages git+https://github.com/guelz/dimensio
 | Move | with the matching tool active: drag it; drag a point's handle (select it first) |
 | Edit text | double-click the label |
 | Delete | select, Delete |
+| Layers | **Layers** menu: tick off a kind to hide it — in the view *and* the saved picture (the `.dims.json` keeps it); picking its tool shows it again |
 | Undo / redo | Ctrl+Z / Ctrl+Shift+Z |
 | Zoom / pan | Ctrl+wheel, middle-drag or Space+drag, Ctrl+0 fits |
 | Save | Ctrl+S → `photo_dims.png` + `photo.jpg.dims.json`; Ctrl+Shift+S to choose |

@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QLabel,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QSpinBox,
     QToolButton,
@@ -152,9 +153,24 @@ class MainWindow(QMainWindow):
         self.ids_box.setToolTip("Name every dimension (A, B, …) and level (L1, …) in the picture, to refer to them in text")
         self.ids_box.toggled.connect(self._on_ids_input)
         bar.addWidget(self.ids_box)
+        layers = QToolButton()
+        layers.setText("Layers")
+        layers.setToolTip("Show or hide each kind; hidden layers are left out of the saved picture too")
+        layers.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        menu = QMenu(layers)
+        self.layer_actions = {}
+        for kind, title in (("dimension", "Dimensions"), ("level", "Levels"), ("line", "Lines"), ("note", "Notes")):
+            action = menu.addAction(title)
+            action.setCheckable(True)
+            action.setChecked(True)
+            action.toggled.connect(self._on_layers_input)
+            self.layer_actions[kind] = action
+        layers.setMenu(menu)
+        self.layers_button = layers
+        bar.addWidget(layers)
 
     def _set_image_loaded(self, loaded: bool) -> None:
-        for widget in (self.save_action, self.save_as_action, self.copy_action, self.width_box, self.size_box, self.color_button, self.outline_box, self.ids_box):
+        for widget in (self.save_action, self.save_as_action, self.copy_action, self.width_box, self.size_box, self.color_button, self.outline_box, self.ids_box, self.layers_button):
             widget.setEnabled(loaded)
 
     def _update_title(self) -> None:
@@ -171,7 +187,9 @@ class MainWindow(QMainWindow):
             box.blockSignals(True)
             box.setValue(round(value))
             box.blockSignals(False)
-        for box, value in ((self.outline_box, style.outline), (self.ids_box, style.ids)):
+        checks = [(self.outline_box, style.outline), (self.ids_box, style.ids)]
+        checks += [(action, kind not in style.hidden) for kind, action in self.layer_actions.items()]
+        for box, value in checks:
             box.blockSignals(True)
             box.setChecked(value)
             box.blockSignals(False)
@@ -191,6 +209,12 @@ class MainWindow(QMainWindow):
         if self.canvas.doc is not None:
             self.canvas.set_style(replace(self.canvas.doc.style, outline=checked))
             self.settings.setValue("outline", checked)
+        self.canvas.setFocus()
+
+    def _on_layers_input(self) -> None:
+        if self.canvas.doc is not None:
+            hidden = tuple(kind for kind, action in self.layer_actions.items() if not action.isChecked())
+            self.canvas.set_style(replace(self.canvas.doc.style, hidden=hidden))
         self.canvas.setFocus()
 
     def _on_ids_input(self, checked: bool) -> None:
@@ -316,7 +340,7 @@ class MainWindow(QMainWindow):
 
     def _write(self, target: Path) -> None:
         image = self.canvas.flattened()
-        image.setText(EMBED_KEY, to_json_text(self.canvas.doc))  # the exported file explains itself
+        image.setText(EMBED_KEY, to_json_text(self.canvas.doc, visible_only=True))  # the export explains itself
         save_image(image, target)
         if self.source is not None and self._keep_sidecar:
             self._warn(f"Saved {target.name}. {sidecar_path(self.source).name} was left untouched, so these dimensions are not kept for re-editing.")

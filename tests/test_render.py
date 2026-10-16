@@ -182,3 +182,11 @@ def test_note_draws_an_arrowhead_at_the_spot_and_its_text(qapp):
     assert is_red(out.pixelColor(100, 244))  # inside the arrowhead just above the spot
     text = sum(is_red(out.pixelColor(x, y)) for x in range(100, 160) for y in range(75, 99))
     assert text > 20
+
+
+def test_hidden_layers_are_not_exported(qapp):
+    from dimensio.model import Line
+
+    line = Line(((50.0, 150.0), (350.0, 150.0)))
+    out = export_image(blank(), Document(style=Style(4, 20, "#FF0000", hidden=("line",)), dimensions=[line]))
+    assert is_white(out.pixelColor(200, 150))

@@ -306,3 +306,19 @@ def test_number_keys_pick_all_four_tools(win, tmp_path):
         action.trigger()
         assert win.canvas.tool == tool
     assert "4" in [s.toString() for s in win.note_action.shortcuts()]
+
+
+def test_layer_checkmarks_hide_kinds_in_view_and_export(win, tmp_path):
+    import json
+
+    photo = make_image(tmp_path / "photo.png")
+    win.open_file(photo)
+    add_dimension(win)
+    win.layer_actions["dimension"].setChecked(False)
+    assert win.canvas.doc.style.hidden == ("dimension",)
+    win.save()
+    assert "dimensions" not in json.loads(QImage(str(tmp_path / "photo_dims.png")).text("dimensio")) or \
+        json.loads(QImage(str(tmp_path / "photo_dims.png")).text("dimensio"))["dimensions"] == []
+    assert load_sidecar(sidecar_path(photo)).dimensions == [DIM]
+    win.undo()
+    assert win.layer_actions["dimension"].isChecked()

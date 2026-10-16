@@ -352,7 +352,6 @@ class NoteItem(EditableItem):
 
 
 _ITEM_TYPES = {Level: LevelItem, Line: LineItem, Note: NoteItem}
-TOOL_OF = {Dimension: "dimension", Level: "level", Line: "line", Note: "note"}  # the tool that edits each kind
 
 
 def make_item(canvas: Canvas, dim: Annotation, style: Style) -> EditableItem:

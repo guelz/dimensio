@@ -35,6 +35,7 @@ class Style:
     color: str = DEFAULT_COLOR
     outline: bool = True  # contrasting halo under lines and text
     ids: bool = False  # draw the A, B, … / L1, … names next to the labels
+    hidden: tuple[str, ...] = ()  # kinds (see KINDS) left out of the view and the export
 
     @classmethod
     def for_image(cls, width: int, height: int, color: str = DEFAULT_COLOR) -> Style:
@@ -99,6 +100,12 @@ class Note:
 
 
 Annotation = Dimension | Level | Line | Note
+
+KINDS = ("dimension", "level", "line", "note")  # one layer per kind, edited by the tool of that name
+
+
+def kind_of(item: Annotation) -> str:
+    return {Dimension: "dimension", Level: "level", Line: "line", Note: "note"}[type(item)]
 
 
 @dataclass(frozen=True)
@@ -192,7 +199,9 @@ def annotation_ids(items) -> list[str]:
     return names
 
 
-def to_json(doc: Document) -> dict:
+def to_json(doc: Document, visible_only: bool = False) -> dict:
+    """The sidecar data. `visible_only` leaves out hidden layers (for data embedded in an export);
+    ids are always counted over everything, so they match the editable file."""
     data: dict = {"version": SIDECAR_VERSION, "about": ABOUT}
     if doc.image is not None:
         data["image"] = {
@@ -207,10 +216,13 @@ def to_json(doc: Document) -> dict:
         "color": doc.style.color,
         "outline": doc.style.outline,
         "ids": doc.style.ids,
+        "hidden": list(doc.style.hidden),
     }
     data["dimensions"] = []
     levels, lines, notes = [], [], []
     for d, name in zip(doc.dimensions, annotation_ids(doc.dimensions)):
+        if visible_only and kind_of(d) in doc.style.hidden:
+            continue
         if isinstance(d, Level):
             levels.append({"id": name, "point": list(d.point), "label": d.label, "offset": list(d.offset)})
             continue
@@ -263,7 +275,11 @@ def from_json(data: object) -> Document:
         ids = style_data.get("ids", False)
         if not isinstance(outline, bool) or not isinstance(ids, bool):
             raise ValueError(f"bad outline/ids {outline!r}/{ids!r}")
-        style = Style(_positive(style_data["line_width"]), _positive(style_data["text_size"]), color, outline, ids)
+        hidden = style_data.get("hidden", [])
+        if not isinstance(hidden, list) or not set(hidden) <= set(KINDS):
+            raise ValueError(f"bad hidden layers {hidden!r}")
+        hidden = tuple(k for k in KINDS if k in hidden)
+        style = Style(_positive(style_data["line_width"]), _positive(style_data["text_size"]), color, outline, ids, hidden)
         dimensions = [
             Dimension(
                 tuple(_point(p) for p in d["points"]),
@@ -289,8 +305,8 @@ def from_json(data: object) -> Document:
     return Document(style=style, dimensions=dimensions, image=image)
 
 
-def to_json_text(doc: Document) -> str:
-    return json.dumps(to_json(doc), indent=2, ensure_ascii=False) + "\n"
+def to_json_text(doc: Document, visible_only: bool = False) -> str:
+    return json.dumps(to_json(doc, visible_only), indent=2, ensure_ascii=False) + "\n"
 
 
 def original_from_data(path: Path, data: dict | None) -> Path | None:

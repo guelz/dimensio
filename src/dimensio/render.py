@@ -22,7 +22,7 @@ from PySide6.QtGui import (
 )
 
 from .geometry import Layout, LevelLayout, NoteLayout, layout, level_layout, note_layout
-from .model import Annotation, Dimension, Document, Level, Line, Note, Style, annotation_ids
+from .model import Annotation, Dimension, Document, Level, Line, Note, Style, annotation_ids, kind_of
 
 ALLOCATION_LIMIT_MB = 1024  # Qt's default of 256 MB refuses photos above ~64 MP
 EMBED_KEY = "dimensio"  # PNG text chunk holding the sidecar JSON in exported images
@@ -257,6 +257,7 @@ def export_image(image: QImage, doc: Document) -> QImage:
     painter = QPainter(out)
     tags = annotation_ids(doc.dimensions) if doc.style.ids else [""] * len(doc.dimensions)
     for dim, tag in zip(doc.dimensions, tags):
-        paint_dimension(painter, build_paths(dim, doc.style, tag), doc.style)
+        if kind_of(dim) not in doc.style.hidden:
+            paint_dimension(painter, build_paths(dim, doc.style, tag), doc.style)
     painter.end()
     return out

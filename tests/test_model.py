@@ -282,3 +282,21 @@ def test_line_needs_two_points():
 
     with pytest.raises(ValueError):
         Line(((0.0, 0.0),))
+
+
+def test_hidden_layers_round_trip_and_are_left_out_of_the_visible_data(tmp_path):
+    from dimensio.model import Line, to_json
+
+    items = [Dimension(((0.0, 0.0), (1.0, 0.0)), ("a",)), Line(((0.0, 0.0), (5.0, 5.0)))]
+    doc = Document(Style(2, 10, hidden=("line",)), items)
+    path = tmp_path / "x.dims.json"
+    save_sidecar(doc, path)
+    assert load_sidecar(path) == doc  # the sidecar keeps everything
+    visible = to_json(doc, visible_only=True)
+    assert "lines" not in visible and visible["dimensions"][0]["id"] == "A"
+
+
+def test_unknown_layer_name_is_rejected():
+    data = {"version": 1, "style": {"line_width": 2, "text_size": 10, "color": "#FFC400", "hidden": ["walls"]}, "dimensions": []}
+    with pytest.raises(SidecarError):
+        from_json(data)
