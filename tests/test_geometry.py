@@ -157,3 +157,25 @@ def test_straight_chain_gives_a_half_circle_and_no_crash_on_zero_legs():
     assert abs(arc.span) == pytest.approx(180.0)
     [arc] = layout(Dimension(((0.0, 0.0), (0.0, 0.0), (10.0, 0.0)), ("a", "b"), angles=("x",)), W, S).angles
     assert math.isfinite(arc.start) and math.isfinite(arc.span) and arc.radius == 0.0
+
+
+def test_level_marker_points_at_the_spot_and_writes_right_of_it():
+    from dimensio.geometry import level_layout
+    from dimensio.model import Level
+
+    lay = level_layout(Level((100.0, 200.0), "+1.20"), W, S)
+    tip, left, right = lay.triangle
+    assert tip == (100.0, 200.0) and lay.leader is None
+    assert left[1] == right[1] < 200.0  # triangle sits above the spot, pointing down
+    assert (right[0] - left[0]) / 2 == pytest.approx((200.0 - left[1]) / math.sqrt(3))  # 60° triangle
+    assert lay.line_start[1] == 200.0 and lay.line_start[0] < left[0]
+    assert lay.text_anchor[0] > right[0] and lay.text_anchor[1] < 200.0
+
+
+def test_dragged_level_marker_gets_a_leader_to_the_spot():
+    from dimensio.geometry import level_layout
+    from dimensio.model import Level
+
+    lay = level_layout(Level((100.0, 200.0), "x", (40.0, -80.0)), W, S)
+    assert lay.triangle[0] == (140.0, 120.0)
+    assert lay.leader == ((100.0, 200.0), (140.0, 120.0))

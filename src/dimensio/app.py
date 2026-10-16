@@ -8,7 +8,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from PySide6.QtCore import QSettings, Qt, QTimer
-from PySide6.QtGui import QAction, QColor, QGuiApplication, QIcon, QKeySequence, QPixmap
+from PySide6.QtGui import QAction, QActionGroup, QColor, QGuiApplication, QIcon, QKeySequence, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -41,7 +41,8 @@ from .render import ImageLoadError, load_image, save_image
 IMAGE_FILTER = "Images (*.jpg *.jpeg *.png *.webp *.tif *.tiff *.bmp *.heic *.heif *.avif);;All files (*)"
 SAVE_FILTER = "PNG image (*.png);;JPEG image (*.jpg *.jpeg)"
 HINT = (
-    "Click, click, type · Ctrl+click: chain · Shift: straight · Esc: cancel · Double-click label: edit · "
+    "D: dimension · L: level · Click, click, type · Ctrl+click: chain · Shift: straight · Esc: cancel · "
+    "Double-click label: edit · "
     "Ctrl+scroll: zoom · Middle or Space+drag: pan · Ctrl+0: fit · Ctrl+Z / Ctrl+Shift+Z: undo / redo"
 )
 
@@ -87,6 +88,15 @@ class MainWindow(QMainWindow):
         self.redo_action = self._action("&Redo", "Ctrl+Shift+Z", self.redo, "edit-redo")
         self._action("&Fit to window", "Ctrl+0", self.canvas.fit, "zoom-fit-best")
         self._action("&Quit", QKeySequence.StandardKey.Quit, self.close)
+        self.tools = QActionGroup(self)
+        self.dimension_action = self._action("&Dimension", "D", lambda: self.canvas.set_tool("dimension"))
+        self.level_action = self._action("&Level", "L", lambda: self.canvas.set_tool("level"))
+        for action, tip in ((self.dimension_action, "Click two points (Ctrl+click for a chain), then type"),
+                            (self.level_action, "Click a spot, type its height (±0.00, +1.25 m …)")):
+            action.setCheckable(True)
+            action.setToolTip(f"{tip} — {action.shortcut().toString()}")
+            self.tools.addAction(action)
+        self.dimension_action.setChecked(True)
         self.undo_action.setEnabled(False)
         self.redo_action.setEnabled(False)
         self.canvas.undo.canUndoChanged.connect(self.undo_action.setEnabled)
@@ -106,6 +116,9 @@ class MainWindow(QMainWindow):
         bar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         for action in (self.open_action, self.save_action, self.copy_action):
             bar.addAction(action)
+        bar.addSeparator()
+        bar.addAction(self.dimension_action)
+        bar.addAction(self.level_action)
         bar.addSeparator()
         bar.addWidget(QLabel(" Line width "))
         self.width_box = self._spin(1, 500)

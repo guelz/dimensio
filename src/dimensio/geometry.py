@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from .model import Dimension, Point
+from .model import Dimension, Level, Point
 
 ARROW_HALF_ANGLE = math.radians(15)
 ANGLE_RADIUS_LEG = 0.4  # arc radius as a share of the shorter leg ...
@@ -72,6 +72,33 @@ class Layout:
     segments: tuple[SegmentLayout, ...]
     extension_lines: tuple[tuple[Point, Point], ...]
     angles: tuple[AngleLayout, ...] = ()
+
+
+@dataclass(frozen=True)
+class LevelLayout:
+    spot: Point  # the marked point
+    triangle: Triangle  # (tip, top-left, top-right); the tip is spot + offset
+    leader: tuple[Point, Point] | None  # spot -> tip once the marker is dragged away
+    line_start: Point  # horizontal reference line through the tip; the renderer runs it past the text
+    text_anchor: Point  # bottom-left of the label, right of the triangle, above the line
+    label: str
+
+
+def level_layout(level: Level, line_width: float, text_size: float) -> LevelLayout:
+    w, s = line_width, text_size
+    dx, dy = level.offset
+    tx, ty = level.point[0] + dx, level.point[1] + dy
+    height = 0.9 * s  # the symbol should read as clearly as the text next to it
+    half = height / math.sqrt(3)  # 60° triangle
+    gap = text_gap(w, s)
+    return LevelLayout(
+        spot=level.point,
+        triangle=((tx, ty), (tx - half, ty - height), (tx + half, ty - height)),
+        leader=(level.point, (tx, ty)) if math.hypot(dx, dy) >= max(w, 1e-9) else None,
+        line_start=(tx - half - 0.3 * s, ty),
+        text_anchor=(tx + half + gap, ty - gap),
+        label=level.label,
+    )
 
 
 def _unit(p: Point, q: Point) -> Point:

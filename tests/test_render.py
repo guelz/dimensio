@@ -144,3 +144,16 @@ def test_angle_label_gets_a_box_only_when_it_has_text(qapp):
     from dataclasses import replace
 
     assert build_paths(replace(dim, angles=("90°",)), STYLE).angle_boxes[0] is not None
+
+
+def test_level_marker_is_half_filled(qapp):
+    from dimensio.geometry import level_layout
+    from dimensio.model import Level
+
+    style = Style(2, 100, "#FF0000")  # big enough that the probes sit well inside the triangle
+    level = Level((200.0, 250.0), "+1.20")
+    tip, left, right = level_layout(level, style.line_width, style.text_size).triangle
+    out = export_image(blank(), Document(style=style, dimensions=[level]))
+    y = round(left[1] + (tip[1] - left[1]) * 0.4)  # a bit below the triangle's top edge
+    assert is_red(out.pixelColor(round(tip[0] - 8), y))  # left half filled
+    assert is_white(out.pixelColor(round(tip[0] + 8), y))  # right half open

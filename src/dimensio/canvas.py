@@ -10,8 +10,8 @@ from PySide6.QtGui import QColor, QImage, QPainter, QPalette, QPixmap, QUndoStac
 from PySide6.QtWidgets import QGraphicsScene, QGraphicsView, QLineEdit, QWidget
 
 from .commands import AddDimension, ChangeDimension, ChangeStyle, RemoveDimension
-from .items import DimensionItem, HandleItem, PathsItem
-from .model import Dimension, Document, Point, Style
+from .items import EditableItem, HandleItem, PathsItem, make_item
+from .model import Annotation, Dimension, Document, Level, Point, Style
 from .render import export_image
 
 HIT_TOLERANCE = 6  # screen pixels around a dimension line that still grab it
@@ -64,21 +64,25 @@ class LabelEditor(QLineEdit):
 
 @dataclass
 class _LabelEdit:
-    item: DimensionItem
-    original: Dimension
+    item: EditableItem
+    original: Annotation
     is_new: bool
-    field: int  # walks along the chain: 2*i = length of segment i, 2*j+1 = angle at corner j+1
+    field: int  # chains: 2*i = length of segment i, 2*j+1 = angle at corner j+1; levels: 0
 
 
-def _field_count(dim: Dimension) -> int:
-    return len(dim.labels) + len(dim.angles)
+def _field_count(dim: Annotation) -> int:
+    return 1 if isinstance(dim, Level) else len(dim.labels) + len(dim.angles)
 
 
-def _field_text(dim: Dimension, field: int) -> str:
+def _field_text(dim: Annotation, field: int) -> str:
+    if isinstance(dim, Level):
+        return dim.label
     return dim.labels[field // 2] if field % 2 == 0 else dim.angles[field // 2]
 
 
-def _with_field(dim: Dimension, field: int, text: str) -> Dimension:
+def _with_field(dim: Annotation, field: int, text: str) -> Annotation:
+    if isinstance(dim, Level):
+        return replace(dim, label=text)
     if field % 2 == 0:
         labels = list(dim.labels)
         labels[field // 2] = text
@@ -102,7 +106,7 @@ class Canvas(QGraphicsView):
         self.undo = QUndoStack(self)
         self.doc: Document | None = None
         self.image: QImage | None = None
-        self._items: list[DimensionItem] = []
+        self._items: list[EditableItem] = []
         self._auto_fit = True
         self._pan_from: QPointF | None = None
         self._space = False
@@ -111,6 +115,7 @@ class Canvas(QGraphicsView):
         self._preview: PathsItem | None = None
         self._editor: LabelEditor | None = None
         self._edit: _LabelEdit | None = None
+        self.tool = "dimension"  # or "level"
 
     # ----- document -----
 
@@ -122,17 +127,22 @@ class Canvas(QGraphicsView):
         self.scene().addPixmap(QPixmap.fromImage(image))
         self.scene().setSceneRect(QRectF(image.rect()))
         for dim in doc.dimensions:
-            item = DimensionItem(self, dim, doc.style)
+            item = make_item(self, dim, doc.style)
             self.scene().addItem(item)
             self._items.append(item)
         self.undo.clear()
         self.fit()
         self.style_changed.emit(doc.style)
 
+    def set_tool(self, tool: str) -> None:
+        """'dimension': click, (Ctrl+)click, type. 'level': one click places a level marker."""
+        self.finish_interaction()
+        self.tool = tool
+
     def has_image(self) -> bool:
         return self.image is not None
 
-    def dimension_items(self) -> list[DimensionItem]:
+    def dimension_items(self) -> list[EditableItem]:
         return list(self._items)
 
     def set_style(self, style: Style) -> None:
@@ -145,9 +155,9 @@ class Canvas(QGraphicsView):
 
     # ----- DocumentHost: called by undo commands and the label editor -----
 
-    def insert_dimension(self, index: int, dim: Dimension) -> None:
+    def insert_dimension(self, index: int, dim: Annotation) -> None:
         self.doc.dimensions.insert(index, dim)
-        item = DimensionItem(self, dim, self.doc.style)
+        item = make_item(self, dim, self.doc.style)
         item.set_hit_tolerance(self._scene_tolerance())
         self.scene().addItem(item)
         self._items.insert(index, item)
@@ -156,7 +166,7 @@ class Canvas(QGraphicsView):
         del self.doc.dimensions[index]
         self.scene().removeItem(self._items.pop(index))
 
-    def replace_dimension(self, index: int, dim: Dimension) -> None:
+    def replace_dimension(self, index: int, dim: Annotation) -> None:
         self.doc.dimensions[index] = dim
         self._items[index].set_dimension(dim)
 
@@ -166,7 +176,7 @@ class Canvas(QGraphicsView):
             item.set_dimension(item.dim, style)
         self.style_changed.emit(style)
 
-    def commit_edit(self, item: DimensionItem, before: Dimension, text: str) -> None:
+    def commit_edit(self, item: EditableItem, before: Annotation, text: str) -> None:
         """Record a finished drag of `item` (already showing its new state) as one undo step."""
         if item.dim != before:
             self.undo.push(ChangeDimension(self, self._items.index(item), before, item.dim, text))
@@ -242,7 +252,11 @@ class Canvas(QGraphicsView):
             super().mousePressEvent(event)
             return
         self.scene().clearSelection()
-        self._add_draft_point(self._event_point(event), event.modifiers())
+        if self.tool == "level":
+            self.insert_dimension(len(self._items), Level(self._event_point(event)))
+            self._start_label_edit(self._items[-1], 0, is_new=True)
+        else:
+            self._add_draft_point(self._event_point(event), event.modifiers())
         event.accept()
 
     def mouseDoubleClickEvent(self, event) -> None:
@@ -293,7 +307,7 @@ class Canvas(QGraphicsView):
 
     def _grabbable_item_at(self, event):
         for item in self.items(event.position().toPoint()):
-            if isinstance(item, (DimensionItem, HandleItem)) and item.isVisible():
+            if isinstance(item, (EditableItem, HandleItem)) and item.isVisible():
                 return item
         return None
 
@@ -410,10 +424,10 @@ class Canvas(QGraphicsView):
     def label_editor(self) -> LabelEditor | None:
         return self._editor
 
-    def edit_labels(self, item: DimensionItem, field: int) -> None:
+    def edit_labels(self, item: EditableItem, field: int) -> None:
         self._start_label_edit(item, field, is_new=False)
 
-    def _start_label_edit(self, item: DimensionItem, field: int, is_new: bool) -> None:
+    def _start_label_edit(self, item: EditableItem, field: int, is_new: bool) -> None:
         self._close_editor(commit=True)
         self._edit = _LabelEdit(item, item.dim, is_new, field)
         editor = LabelEditor(self.viewport())
@@ -428,17 +442,10 @@ class Canvas(QGraphicsView):
 
     def _show_label_segment(self) -> None:
         edit = self._edit
-        layout = edit.item.paths.layout
-        if edit.field % 2 == 0:
-            seg = layout.segments[edit.field // 2]
-            self.ensureVisible(QRectF(QPointF(*seg.start), QPointF(*seg.end)).normalized(), 60, 60)
-            self._editor.setPlaceholderText("label")
-            self._editor.set_prefix("↔")
-        else:
-            arc = layout.angles[edit.field // 2]
-            self.ensureVisible(QRectF(QPointF(*arc.center), QPointF(*arc.text_center)).normalized(), 60, 60)
-            self._editor.setPlaceholderText("angle (optional)")
-            self._editor.set_prefix("∠")
+        info = edit.item.field_info(edit.field)
+        self.ensureVisible(info.area, 60, 60)
+        self._editor.setPlaceholderText(info.placeholder)
+        self._editor.set_prefix(info.prefix)
         edit.item.set_highlight(edit.field)
         self._editor.setText(_field_text(edit.item.dim, edit.field))
         self._editor.selectAll()
@@ -447,14 +454,10 @@ class Canvas(QGraphicsView):
     def _place_editor(self) -> None:
         if self._editor is None:
             return
-        layout = self._edit.item.paths.layout
+        info = self._edit.item.field_info(self._edit.field)
         height = self._editor.sizeHint().height()
-        if self._edit.field % 2 == 0:
-            anchor = self.mapFromScene(QPointF(*layout.segments[self._edit.field // 2].text_anchor))
-            top = anchor.y() - height  # sits on the line, where the label goes
-        else:
-            anchor = self.mapFromScene(QPointF(*layout.angles[self._edit.field // 2].text_center))
-            top = anchor.y() - height // 2
+        anchor = self.mapFromScene(QPointF(*info.anchor))
+        top = anchor.y() - (height // 2 if info.centered else height)  # bottom-centred labels sit on their line
         self._editor.setGeometry(anchor.x() - EDITOR_WIDTH // 2, top, EDITOR_WIDTH, height)
 
     def _on_label_edited(self, text: str) -> None:

@@ -216,3 +216,17 @@ def test_angles_round_trip_and_are_omitted_when_empty(tmp_path):
     data = path.read_text(encoding="utf-8")
     assert data.count('"angles"') == 1
     assert load_sidecar(path).dimensions == [with_angle, without]
+
+
+def test_levels_round_trip_next_to_dimensions(tmp_path):
+    from dimensio.model import Level
+
+    doc = Document(Style(2, 10), [Dimension(((0.0, 0.0), (1.0, 0.0)), ("a",)), Level((5.0, 6.0), "+1.20", (0.0, -30.0))])
+    path = tmp_path / "x.dims.json"
+    save_sidecar(doc, path)
+    assert load_sidecar(path).dimensions == doc.dimensions
+
+
+def test_sidecar_without_levels_still_loads():
+    data = {"version": 1, "style": {"line_width": 2, "text_size": 10, "color": "#FFC400"}, "dimensions": []}
+    assert from_json(data).dimensions == []

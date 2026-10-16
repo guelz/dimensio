@@ -69,6 +69,18 @@ class Dimension:
 
 
 @dataclass(frozen=True)
+class Level:
+    """A height marker (Höhenkote): a half-filled triangle pointing at `point` with a free-text level."""
+
+    point: Point
+    label: str = ""
+    offset: Point = (0.0, 0.0)
+
+
+Annotation = Dimension | Level
+
+
+@dataclass(frozen=True)
 class ImageInfo:
     file: str
     width: int
@@ -86,7 +98,7 @@ class ImageInfo:
 @dataclass
 class Document:
     style: Style
-    dimensions: list[Dimension] = field(default_factory=list)
+    dimensions: list[Annotation] = field(default_factory=list)  # everything drawn, in drawing order
     image: ImageInfo | None = None  # None for pasted images
 
 
@@ -134,11 +146,17 @@ def to_json(doc: Document) -> dict:
         "outline": doc.style.outline,
     }
     data["dimensions"] = []
+    levels = []
     for d in doc.dimensions:
+        if isinstance(d, Level):
+            levels.append({"point": list(d.point), "label": d.label, "offset": list(d.offset)})
+            continue
         entry = {"points": [list(p) for p in d.points], "labels": list(d.labels), "offset": list(d.offset)}
         if any(d.angles):  # only stored when something was typed
             entry["angles"] = list(d.angles)
         data["dimensions"].append(entry)
+    if levels:
+        data["levels"] = levels
     return data
 
 
@@ -183,6 +201,9 @@ def from_json(data: object) -> Document:
                 tuple(str(a) for a in d.get("angles", ())),
             )
             for d in data["dimensions"]
+        ]
+        dimensions += [
+            Level(_point(v["point"]), str(v["label"]), _point(v["offset"])) for v in data.get("levels", [])
         ]
         image = None
         if "image" in data:

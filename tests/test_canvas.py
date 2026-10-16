@@ -332,3 +332,30 @@ def test_highlight_never_reaches_the_export(canvas, qtbot):
     from dimensio.render import export_image
 
     assert export_image(canvas.image, canvas.doc) == before
+
+
+def test_level_tool_places_a_marker_with_one_click(canvas, qtbot):
+    from dimensio.model import Level
+
+    canvas.set_tool("level")
+    click(canvas, 200, 200)
+    editor = canvas.label_editor()
+    assert editor.prefix() == "▽"
+    qtbot.keyClicks(editor, "+1.20")
+    qtbot.keyClick(editor, Qt.Key.Key_Return)
+    [level] = canvas.doc.dimensions
+    assert isinstance(level, Level) and level.label == "+1.20"
+    assert level.point == pytest.approx((200, 200), abs=1.0)
+    drag(canvas, (200, 190), (240, 150))  # grab the triangle, move it away
+    [moved] = canvas.doc.dimensions
+    assert moved.point == level.point and moved.offset == pytest.approx((40, -40), abs=1.0)
+    canvas.undo.undo()
+    canvas.undo.undo()
+    assert canvas.doc.dimensions == []
+
+
+def test_escape_discards_a_new_level_marker(canvas, qtbot):
+    canvas.set_tool("level")
+    click(canvas, 200, 200)
+    qtbot.keyClick(canvas.label_editor(), Qt.Key.Key_Escape)
+    assert canvas.doc.dimensions == []

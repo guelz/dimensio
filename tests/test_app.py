@@ -245,3 +245,11 @@ def test_outline_checkbox_is_undoable_and_remembered(win, tmp_path):
     win.open_file(make_image(tmp_path / "b.png"))
     assert win.canvas.doc.style.outline is False
     assert not win.outline_box.isChecked()
+
+
+def test_tool_picker_switches_the_canvas_tool(win, tmp_path):
+    win.open_file(make_image(tmp_path / "a.png"))
+    win.level_action.trigger()
+    assert win.canvas.tool == "level"
+    win.dimension_action.trigger()
+    assert win.canvas.tool == "dimension"
