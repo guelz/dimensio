@@ -17,9 +17,10 @@ friend, an AI drawing your house model) knows without asking which number belong
 - **Ctrl+click** for chains (`70 | 70 | 70 cm` along a wall)
 - Optional angles: every corner of a chain can get an angle label (`35°`) with an arc — drawn
   only if you type something
+- Level markers (`▽ ±0.00`, `+1.25 m`) for heights and terrain
 - Text always lies along the line and is never upside down
-- Four settings for the whole image: line width, text size, color, outline on/off (off for very
-  thin lines)
+- Settings for the whole image: line width, text size, color, outline on/off (off for very thin
+  lines), ID tags on/off
 - Saves a flat `photo_dims.png` to send to people, plus `photo.jpg.dims.json` so you can keep
   editing later — opening either `photo.jpg` or `photo_dims.png` brings the editable lines back
 - Copy the result straight to the clipboard
@@ -48,9 +49,11 @@ pipx install --system-site-packages git+https://github.com/guelz/dimensio
 | Do | How |
 |---|---|
 | Open | `dimensio photo.jpg`, Open With, drag and drop, Ctrl+O, or paste (Ctrl+V) |
+| Tool | **D** dimension, **L** level marker (toolbar) |
 | Dimension | click A, click B, type the label, Enter |
 | Chain | Ctrl+click every point but the last; Enter/Tab walks the labels, Shift+Tab goes back |
 | Angle | in a chain, Tab walks length → angle at the corner → length …; leave an angle empty to skip it |
+| Level | with the level tool, click the spot and type its height; drag the marker away if it's in the way |
 | Straight | hold Shift for horizontal or vertical |
 | Move | drag the line; drag a point's handle (select the dimension first) |
 | Edit text | double-click the label |
@@ -59,6 +62,20 @@ pipx install --system-site-packages git+https://github.com/guelz/dimensio
 | Zoom / pan | Ctrl+wheel, middle-drag or Space+drag, Ctrl+0 fits |
 | Save | Ctrl+S → `photo_dims.png` + `photo.jpg.dims.json`; Ctrl+Shift+S to choose |
 | Copy result | Ctrl+C |
+
+## For scripts and AI assistants
+
+Every exported PNG carries its dimension data as JSON inside the file, and the same data sits in
+the `.dims.json` next to the original. It names every item (`A`, `B`, … for dimensions, `L1`, …
+for levels — switch on **IDs** to tag them in the picture too) and explains its own fields:
+pixel coordinates of every measured point, the label of every segment, angle and level.
+
+```bash
+dimensio --data photo_dims.png    # print it
+```
+
+So when you hand a picture to an AI model, it doesn't have to guess which number belongs to which
+edge; it can read both the picture and the exact geometry.
 
 ## Develop
 
