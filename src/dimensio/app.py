@@ -47,9 +47,14 @@ from .model import (
 from .render import EMBED_KEY, ImageLoadError, load_image, print_image, read_embedded, save_image
 
 IMAGE_FILTER = "Images (*.jpg *.jpeg *.png *.webp *.tif *.tiff *.bmp *.heic *.heif *.avif);;All files (*)"
+TOOL_BUTTON_STYLE = """
+QToolButton { border: 1px solid palette(mid); border-radius: 5px; padding: 3px 10px; margin: 2px 1px; font-weight: 600; }
+QToolButton:hover { border-color: palette(highlight); }
+QToolButton:checked { background: palette(highlight); color: palette(highlighted-text); border-color: palette(highlight); }
+"""
 SAVE_FILTER = "PNG image (*.png);;JPEG image (*.jpg *.jpeg)"
 HINT = (
-    "1-5: dimension, level, line, note, circle (each edits only its own kind) · Click, click, type · Ctrl+click: chain · Shift: straight · Alt: no snap · Esc: cancel · "
+    "1-5: dimension, level, line, note, circle (each edits only its own kind) · Click, click, type · hold Ctrl: chain (let go to finish) · Shift: straight · Alt: no snap · Esc: cancel · "
     "Double-click label: edit · "
     "Ctrl+scroll: zoom · Middle or Space+drag: pan · F: fit · Ctrl+Z / Ctrl+Shift+Z: undo / redo"
 )
@@ -115,11 +120,12 @@ class MainWindow(QMainWindow):
         self.fit_action.setToolTip("Fit the whole picture into the window — F")
         self._action("&Quit", QKeySequence.StandardKey.Quit, self.close)
         self.tools = QActionGroup(self)
-        self.dimension_action = self._action("&Dimension", "1", lambda: self._pick_tool("dimension"))
-        self.level_action = self._action("&Level", "2", lambda: self._pick_tool("level"))
-        self.line_action = self._action("L&ine", "3", lambda: self._pick_tool("line"))
-        self.note_action = self._action("&Note", "4", lambda: self._pick_tool("note"))
-        self.circle_action = self._action("&Circle", "5", lambda: self._pick_tool("circle"))
+        # The key comes first in the label: the buttons teach their shortcuts.
+        self.dimension_action = self._action("1 Dimension", "1", lambda: self._pick_tool("dimension"))
+        self.level_action = self._action("2 Level", "2", lambda: self._pick_tool("level"))
+        self.line_action = self._action("3 Line", "3", lambda: self._pick_tool("line"))
+        self.note_action = self._action("4 Note", "4", lambda: self._pick_tool("note"))
+        self.circle_action = self._action("5 Circle", "5", lambda: self._pick_tool("circle"))
         for action, letter, tip in (
             (self.dimension_action, "D", "Click two points (Ctrl+click for a chain), then type"),
             (self.level_action, "L", "Click a spot, type its height (±0.00, +1.25 m …)"),
@@ -163,6 +169,9 @@ class MainWindow(QMainWindow):
         bar.addSeparator()
         for action in (self.dimension_action, self.level_action, self.line_action, self.note_action, self.circle_action):
             bar.addAction(action)
+            button = bar.widgetForAction(action)
+            button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+            button.setStyleSheet(TOOL_BUTTON_STYLE)
         bar.addSeparator()
         bar.addWidget(QLabel(" Line width "))
         self.width_box = self._spin(1, 500)
@@ -225,7 +234,7 @@ class MainWindow(QMainWindow):
             self.snap_status.setText("Snap paused (Alt)")
             self.snap_status.setStyleSheet("color: palette(placeholder-text); font-style: italic;")
         elif on:
-            self.snap_status.setText("⌖ Snap on")
+            self.snap_status.setText("● Snap on")
             self.snap_status.setStyleSheet("color: #04B503; font-weight: bold;")
         else:
             self.snap_status.setText("Snap off")

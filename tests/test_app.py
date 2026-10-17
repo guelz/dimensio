@@ -374,7 +374,7 @@ def test_holding_alt_shows_snap_paused(win, tmp_path, qtbot):
     qtbot.keyPress(win.canvas, Qt.Key.Key_Alt)
     assert "Alt" in win.snap_status.text()
     qtbot.keyRelease(win.canvas, Qt.Key.Key_Alt)
-    assert win.snap_status.text() == "⌖ Snap on"
+    assert win.snap_status.text() == "● Snap on"
 
 
 def test_save_as_elsewhere_keeps_the_photo_folder_clean_and_stays_editable(win, tmp_path, monkeypatch):
@@ -427,3 +427,13 @@ def test_print_is_in_the_toolbar_on_ctrl_p(win, tmp_path):
     assert not win.print_action.isEnabled()
     win.open_file(make_image(tmp_path / "a.png"))
     assert win.print_action.isEnabled()
+
+
+def test_tool_buttons_are_framed_and_show_their_key(win):
+    from PySide6.QtWidgets import QToolBar
+
+    [bar] = win.findChildren(QToolBar)
+    for key, action in zip("12345", (win.dimension_action, win.level_action, win.line_action, win.note_action, win.circle_action)):
+        button = bar.widgetForAction(action)
+        assert button.text().startswith(f"{key} ")
+        assert "border" in button.styleSheet() and ":checked" in button.styleSheet()
