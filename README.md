@@ -1,15 +1,14 @@
 # Dimensio
 
-Add dimension lines with **your own measurements** to photos — the way a technical drawing does
+Add dimension lines with **your measurements** to photos — the way a technical drawing does
 it, but on a picture of a sofa, a wall or a window opening. Click two points, type `284 cm`,
 drag the line clear of the object. Done.
 
 ![Dimensio](docs/screenshot.png)
 
-**Dimensio doesn't measure anything.** No scale, no calibration, no photogrammetry. You already
-know your numbers from the tape measure, the plan or the datasheet. Dimensio is for *handing them
-on*: the quickest way to put them on a picture so clearly that whoever gets it (a carpenter, a
-friend, an AI drawing your house model) knows without asking which number belongs to which edge.
+**Dimensio doesn't measure anything.** No scale, no calibration, no photogrammetry. Dimensio is
+for *handing your measurements on*: a quick way to show someone exactly what you mean. Give it to
+a friend, a carpenter, or an LLM doing CAD work.
 
 ![Dimensio examples](docs/examples.png)
 
@@ -23,13 +22,13 @@ friend, an AI drawing your house model) knows without asking which number belong
   only if you type something
 - Level markers (`▽ ±0.00`, `+1.25 m`) for heights and terrain
 - Plain lines, and one-line notes with an arrow pointing at what you mean ("drain pipe")
-- Circles with a centre cross; type `Ø 40` for a diameter line or `R 20` for a radius line
+- Circles with a center cross; type `Ø 40` for a diameter line or `R 20` for a radius line
 - Snapping to existing points, lines and circles (always shown in the status bar)
 - Text always lies along the line and is never upside down
 - Each layer (dimensions, levels, lines, notes, circles) has its own color, line width and outline;
   text size, ID tags and which layers are shown apply to the whole picture
-- Saves one flat `photo_dims.png` to send to people — opening either `photo.jpg` or the saved
-  picture brings the editable lines back; **Save As** puts it anywhere, so the photo folder stays clean
+- Saves one flat `photo_dims.png` to send to people — opening the saved picture brings the
+  editable lines back; **Save As** puts it anywhere, so the photo folder stays clean
 - Copy the result straight to the clipboard
 
 ## Install
@@ -63,7 +62,7 @@ pipx install --system-site-packages git+https://github.com/guelz/dimensio
 | Level | with the level tool, click the spot and type its height; drag the marker away if it's in the way |
 | Line | click, Ctrl+click for more points, click to finish; drag to move it |
 | Note | click what you mean, type one line, Enter; drag the text where it fits |
-| Circle | click the centre, click the edge; type `Ø 40` (diameter) or `R 20` (radius), or nothing for a plain circle |
+| Circle | click the center, click the edge; type `Ø 40` (diameter) or `R 20` (radius), or nothing for a plain circle |
 | Snap | on by default: points land on nearby points, lines and circles (marker shows where); hold **Alt** to skip once, **S** or the status bar switch toggles it |
 | Straight | hold Shift for horizontal or vertical |
 | Move | with the matching tool active: drag it; drag a point's handle (select it first) |
