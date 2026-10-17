@@ -19,9 +19,11 @@ friend, an AI drawing your house model) knows without asking which number belong
   only if you type something
 - Level markers (`▽ ±0.00`, `+1.25 m`) for heights and terrain
 - Plain lines, and one-line notes with an arrow pointing at what you mean ("drain pipe")
+- Circles with a centre cross; type `Ø 40` for a diameter line or `R 20` for a radius line
+- Snapping to existing points, lines and circles (always shown in the status bar)
 - Text always lies along the line and is never upside down
-- Settings for the whole image: line width, text size, color, outline on/off (off for very thin
-  lines), ID tags on/off, and which layers (dimensions, levels, lines, notes) are shown
+- Each layer (dimensions, levels, lines, notes, circles) has its own color, line width and outline;
+  text size, ID tags and which layers are shown apply to the whole picture
 - Saves a flat `photo_dims.png` to send to people, plus `photo.jpg.dims.json` so you can keep
   editing later — opening either `photo.jpg` or `photo_dims.png` brings the editable lines back
 - Copy the result straight to the clipboard
@@ -50,13 +52,15 @@ pipx install --system-site-packages git+https://github.com/guelz/dimensio
 | Do | How |
 |---|---|
 | Open | `dimensio photo.jpg`, Open With, drag and drop, Ctrl+O, or paste (Ctrl+V) |
-| Tool | **1**/**D** dimension, **2**/**L** level marker, **3** line, **4**/**T** note (toolbar). Each tool is its own layer: it only selects, moves and edits its own kind, and clicks go straight through everything else |
+| Tool | **1**/**D** dimension, **2**/**L** level marker, **3** line, **4**/**T** note, **5**/**C** circle (toolbar). Each tool is its own layer: it only selects, moves and edits its own kind, clicks go straight through everything else, and the toolbar's color / width / outline apply to that layer |
 | Dimension | click A, click B, type the label, Enter |
 | Chain | Ctrl+click every point but the last; Enter/Tab walks the labels, Shift+Tab goes back |
 | Angle | in a chain, Tab walks length → angle at the corner → length …; leave an angle empty to skip it |
 | Level | with the level tool, click the spot and type its height; drag the marker away if it's in the way |
 | Line | click, Ctrl+click for more points, click to finish; drag to move it |
 | Note | click what you mean, type one line, Enter; drag the text where it fits |
+| Circle | click the centre, click the edge; type `Ø 40` (diameter) or `R 20` (radius), or nothing for a plain circle |
+| Snap | on by default: points land on nearby points, lines and circles (marker shows where); hold **Alt** to skip once, **S** or the status bar switch toggles it |
 | Straight | hold Shift for horizontal or vertical |
 | Move | with the matching tool active: drag it; drag a point's handle (select it first) |
 | Edit text | double-click the label |
