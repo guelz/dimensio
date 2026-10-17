@@ -44,7 +44,7 @@ from .model import (
     sidecar_path,
     to_json_text,
 )
-from .render import EMBED_KEY, ImageLoadError, load_image, read_embedded, save_image
+from .render import EMBED_KEY, ImageLoadError, load_image, print_image, read_embedded, save_image
 
 IMAGE_FILTER = "Images (*.jpg *.jpeg *.png *.webp *.tif *.tiff *.bmp *.heic *.heif *.avif);;All files (*)"
 SAVE_FILTER = "PNG image (*.png);;JPEG image (*.jpg *.jpeg)"
@@ -104,6 +104,7 @@ class MainWindow(QMainWindow):
         self.save_action = self._action("&Save", QKeySequence.StandardKey.Save, self.save, "document-save")
         self.save_as_action = self._action("Save &As…", "Ctrl+Shift+S", self.save_as, "document-save-as")
         self.copy_action = self._action("&Copy image", QKeySequence.StandardKey.Copy, self.copy, "edit-copy")
+        self.print_action = self._action("&Print…", QKeySequence.StandardKey.Print, self.print_picture, "document-print")
         self._action("&Paste image", QKeySequence.StandardKey.Paste, self.paste)
         self.undo_action = self._action("&Undo", QKeySequence.StandardKey.Undo, self.undo, "edit-undo")
         self.redo_action = self._action("&Redo", "Ctrl+Shift+Z", self.redo, "edit-redo")
@@ -149,7 +150,7 @@ class MainWindow(QMainWindow):
         bar = self.addToolBar("Main")
         bar.setMovable(False)
         bar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        for action in (self.open_action, self.save_action, self.save_as_action, self.copy_action, self.fit_action):
+        for action in (self.open_action, self.save_action, self.save_as_action, self.copy_action, self.print_action, self.fit_action):
             bar.addAction(action)
         self.json_box = QCheckBox("Save .json")
         self.json_box.setToolTip(
@@ -202,7 +203,7 @@ class MainWindow(QMainWindow):
         bar.addWidget(layers)
 
     def _set_image_loaded(self, loaded: bool) -> None:
-        for widget in (self.save_action, self.save_as_action, self.copy_action, self.width_box, self.size_box, self.color_button, self.outline_box, self.ids_box, self.layers_button):
+        for widget in (self.save_action, self.save_as_action, self.copy_action, self.print_action, self.width_box, self.size_box, self.color_button, self.outline_box, self.ids_box, self.layers_button):
             widget.setEnabled(loaded)
 
     def _update_title(self) -> None:
@@ -446,6 +447,20 @@ class MainWindow(QMainWindow):
             return
         QGuiApplication.clipboard().setImage(self.canvas.flattened())
         self.statusBar().showMessage("Image copied to the clipboard", 3000)
+
+    def print_picture(self) -> None:
+        """Print preview first; the picture fills the page, portrait or landscape to match."""
+        from PySide6.QtPrintSupport import QPrinter, QPrintPreviewDialog
+
+        if self.canvas.doc is None:
+            return
+        image = self.canvas.flattened()
+        printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+        printer.setDocName(self.source.stem if self.source else "Dimensio")
+        dialog = QPrintPreviewDialog(printer, self)
+        dialog.paintRequested.connect(lambda p: print_image(p, image))
+        dialog.exec()
+        self.canvas.setFocus()
 
     def undo(self) -> None:
         self.canvas.finish_interaction()

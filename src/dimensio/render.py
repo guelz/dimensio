@@ -284,6 +284,25 @@ def paint_dimension(painter: QPainter, paths: DimensionPaths, style: Style) -> N
     painter.restore()
 
 
+def print_image(printer, image: QImage) -> QRectF:
+    """Print `image` as large as the page allows, centred, in the orientation that suits it.
+    Returns the rectangle it was drawn into (device pixels)."""
+    from PySide6.QtGui import QPageLayout
+
+    printer.setPageOrientation(
+        QPageLayout.Orientation.Landscape if image.width() > image.height() else QPageLayout.Orientation.Portrait
+    )
+    painter = QPainter(printer)
+    page = QRectF(painter.viewport())
+    size = image.size().toSizeF().scaled(page.size(), Qt.AspectRatioMode.KeepAspectRatio)
+    target = QRectF(page.x() + (page.width() - size.width()) / 2, page.y() + (page.height() - size.height()) / 2,
+                    size.width(), size.height())
+    painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+    painter.drawImage(target, image)
+    painter.end()
+    return target
+
+
 def export_image(image: QImage, doc: Document) -> QImage:
     out = image.convertToFormat(QImage.Format.Format_ARGB32_Premultiplied)
     painter = QPainter(out)

@@ -70,6 +70,7 @@ pipx install --system-site-packages git+https://github.com/guelz/dimensio
 | Zoom / pan | Ctrl+wheel, middle-drag or Space+drag, **F** fits the whole picture |
 | Save | **Save** (Ctrl+S) → `photo_dims.png` next to the photo, or wherever you last saved this picture; **Save As** (Ctrl+Shift+S) to choose, it remembers the folder. Tick **Save .json** to also keep `photo.jpg.dims.json` next to the photo |
 | Copy result | Ctrl+C |
+| Print | **Print** (Ctrl+P): preview first; the picture fills the page, portrait or landscape to match |
 
 ## For scripts and AI assistants
 

@@ -415,3 +415,15 @@ def test_save_as_is_in_the_toolbar(win):
 
     [bar] = win.findChildren(QToolBar)
     assert win.save_as_action in bar.actions()
+
+
+def test_print_is_in_the_toolbar_on_ctrl_p(win, tmp_path):
+    from PySide6.QtGui import QKeySequence
+    from PySide6.QtWidgets import QToolBar
+
+    [bar] = win.findChildren(QToolBar)
+    assert win.print_action in bar.actions()
+    assert win.print_action.shortcut() == QKeySequence(QKeySequence.StandardKey.Print)
+    assert not win.print_action.isEnabled()
+    win.open_file(make_image(tmp_path / "a.png"))
+    assert win.print_action.isEnabled()

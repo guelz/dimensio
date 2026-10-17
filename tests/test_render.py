@@ -211,3 +211,22 @@ def test_circle_draws_its_measurement_line_only_with_text(qapp):
     assert is_white(plain.pixelColor(250, 150))  # no line inside
     measured = export_image(blank(), Document(style=STYLE, dimensions=[Circle((200.0, 150.0), (300.0, 150.0), "Ø 20")]))
     assert is_red(measured.pixelColor(250, 150))
+
+
+def test_print_fits_the_picture_on_the_page(qapp, tmp_path):
+    from PySide6.QtGui import QPageLayout
+    from PySide6.QtPrintSupport import QPrinter
+
+    from dimensio.render import print_image
+
+    printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+    printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
+    printer.setOutputFileName(str(tmp_path / "out.pdf"))
+    target = print_image(printer, blank(400, 300))
+    page = printer.pageLayout().paintRectPixels(printer.resolution())
+    assert printer.pageLayout().orientation() == QPageLayout.Orientation.Landscape  # wide picture, wide page
+    fills_width = target.width() == pytest.approx(page.width(), abs=2)
+    fills_height = target.height() == pytest.approx(page.height(), abs=2)
+    assert (fills_width or fills_height) and target.width() <= page.width() + 2 and target.height() <= page.height() + 2
+    assert abs(target.width() / target.height() - 4 / 3) < 0.01
+    assert (tmp_path / "out.pdf").stat().st_size > 0
