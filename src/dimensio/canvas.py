@@ -99,6 +99,7 @@ def _with_field(dim: Annotation, field: int, text: str) -> Annotation:
 class Canvas(QGraphicsView):
     style_changed = Signal(object)  # Style, after every style change including undo
     snap_changed = Signal(bool)
+    snap_paused = Signal(bool)  # Alt held: this click won't snap
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -122,6 +123,7 @@ class Canvas(QGraphicsView):
         self._edit: _LabelEdit | None = None
         self.tool = "dimension"  # or "level", "line", "note", "circle"
         self.snap_enabled = True
+        self._alt = False
         self._marker: SnapMarker | None = None
 
     # ----- document -----
@@ -181,6 +183,13 @@ class Canvas(QGraphicsView):
             self._marker.update()
             self._marker.show()
         return snapped
+
+    def _set_alt(self, held: bool) -> None:
+        if held != self._alt:
+            self._alt = held
+            if held:
+                self.hide_snap_marker()
+            self.snap_paused.emit(held)
 
     def hide_snap_marker(self) -> None:
         if self._marker is not None:
@@ -327,6 +336,7 @@ class Canvas(QGraphicsView):
             super().mouseDoubleClickEvent(event)
 
     def mouseMoveEvent(self, event) -> None:
+        self._set_alt(bool(event.modifiers() & Qt.KeyboardModifier.AltModifier))  # also catches Alt pressed elsewhere
         if self._pan_from is not None:
             delta = event.position() - self._pan_from
             self._pan_from = event.position()
@@ -454,6 +464,9 @@ class Canvas(QGraphicsView):
 
     def keyPressEvent(self, event) -> None:
         key = event.key()
+        if key == Qt.Key.Key_Alt:
+            self._set_alt(True)
+            return
         if key == Qt.Key.Key_Space and not event.isAutoRepeat():
             self._space = True
             self.viewport().setCursor(Qt.CursorShape.OpenHandCursor)
@@ -482,9 +495,13 @@ class Canvas(QGraphicsView):
         self._space = False
         self._pan_from = None
         self.viewport().unsetCursor()
+        self._set_alt(False)
         super().focusOutEvent(event)
 
     def keyReleaseEvent(self, event) -> None:
+        if event.key() == Qt.Key.Key_Alt:
+            self._set_alt(False)
+            return
         if event.key() == Qt.Key.Key_Space and not event.isAutoRepeat():
             self._space = False
             self.viewport().unsetCursor()

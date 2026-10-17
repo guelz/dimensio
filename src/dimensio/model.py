@@ -67,8 +67,9 @@ class Style:
     @classmethod
     def for_image(cls, width: int, height: int, color: str = DEFAULT_COLOR) -> Style:
         diagonal = math.hypot(width, height)
-        # Fitted to what Philipp sets by hand: 2-3 px / ~36 px on a 12 MP photo, 1 px / 6 px on a 640 px plan.
-        return cls(line_width=max(1, round(0.0005 * diagonal)), text_size=max(6, round(0.007 * diagonal)), color=color)
+        # Middle ground (geometric mean) between thin-on-white-scans and readable-on-busy-photos:
+        # a 12 MP photo gets 6 px / 60 px, a 640 px plan 1 px / 9 px.
+        return cls(line_width=max(1, round(0.0011 * diagonal)), text_size=max(6, round(0.012 * diagonal)), color=color)
 
 
 @dataclass(frozen=True)

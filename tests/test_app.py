@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import QSize
+from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QColor, QGuiApplication, QImage
 
 import dimensio.app as app_module
@@ -361,3 +361,11 @@ def test_snap_state_is_always_visible_and_s_toggles_it(win, tmp_path):
     assert [s.toString() for s in win.snap_action.shortcuts()] == ["S"]
     win.snap_status.click()  # the indicator itself toggles too
     assert win.canvas.snap_enabled
+
+
+def test_holding_alt_shows_snap_paused(win, tmp_path, qtbot):
+    win.open_file(make_image(tmp_path / "a.png"))
+    qtbot.keyPress(win.canvas, Qt.Key.Key_Alt)
+    assert "Alt" in win.snap_status.text()
+    qtbot.keyRelease(win.canvas, Qt.Key.Key_Alt)
+    assert win.snap_status.text() == "⌖ Snap on"

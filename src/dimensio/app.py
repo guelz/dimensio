@@ -75,7 +75,9 @@ class MainWindow(QMainWindow):
         self.snap_status.setToolTip("Snap new points to nearby points, lines and circles — click or press S; hold Alt to skip once")
         self.snap_status.clicked.connect(self.snap_action.toggle)
         self.statusBar().addPermanentWidget(self.snap_status)
+        self._snap_paused = False
         self.canvas.snap_changed.connect(self._show_snap)
+        self.canvas.snap_paused.connect(self._pause_snap)
         snap_on = self.settings.value("snap", True, type=bool)
         self.snap_action.setChecked(snap_on)
         self.canvas.set_snap(snap_on)
@@ -202,9 +204,16 @@ class MainWindow(QMainWindow):
             name = None
         self.setWindowTitle(f"{name}[*] — Dimensio" if name else "Dimensio")
 
+    def _pause_snap(self, paused: bool) -> None:
+        self._snap_paused = paused
+        self._show_snap(self.canvas.snap_enabled)
+
     def _show_snap(self, on: bool) -> None:
         """Always visible bottom right, so a forgotten toggle is obvious."""
-        if on:
+        if on and self._snap_paused:
+            self.snap_status.setText("Snap paused (Alt)")
+            self.snap_status.setStyleSheet("color: palette(placeholder-text); font-style: italic;")
+        elif on:
             self.snap_status.setText("⌖ Snap on")
             self.snap_status.setStyleSheet("color: #04B503; font-weight: bold;")
         else:
