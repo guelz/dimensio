@@ -507,3 +507,28 @@ def test_a_chain_closes_on_its_first_point(canvas, qtbot):
     click(canvas, 250, 200, CTRL)
     click(canvas, 52, 51)
     assert canvas.doc.dimensions[0].points[-1] == canvas.doc.dimensions[0].points[0]
+
+
+def test_releasing_ctrl_finishes_the_chain_with_the_last_point(canvas, qtbot):
+    click(canvas, 50, 250, CTRL)
+    click(canvas, 150, 250, CTRL)
+    click(canvas, 250, 250, CTRL)
+    assert canvas.label_editor() is None
+    qtbot.keyRelease(canvas, Qt.Key.Key_Control)
+    assert canvas.label_editor() is not None
+    qtbot.keyClick(canvas.label_editor(), Qt.Key.Key_Escape)
+    click(canvas, 50, 100, CTRL)  # releasing after a single point just continues normally
+    qtbot.keyRelease(canvas, Qt.Key.Key_Control)
+    assert canvas.is_drawing() and canvas.label_editor() is None
+
+
+def test_enter_or_double_click_also_finish_a_chain(canvas, qtbot):
+    canvas.set_tool("line")
+    click(canvas, 50, 50, CTRL)
+    click(canvas, 150, 50, CTRL)
+    qtbot.keyClick(canvas, Qt.Key.Key_Return)
+    assert len(canvas.doc.dimensions[0].points) == 2
+    click(canvas, 50, 200, CTRL)
+    click(canvas, 150, 200, CTRL)
+    double_click(canvas, 250, 220)
+    assert len(canvas.doc.dimensions[1].points) == 3

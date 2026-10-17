@@ -330,7 +330,9 @@ class Canvas(QGraphicsView):
         event.accept()
 
     def mouseDoubleClickEvent(self, event) -> None:
-        if self._draft:
+        if len(self._draft) >= 2:
+            self._finish_draft()  # the first click of the double-click placed the last point
+        elif self._draft:
             self.mousePressEvent(event)  # fast clicking while drawing still places points
         else:
             super().mouseDoubleClickEvent(event)
@@ -475,6 +477,9 @@ class Canvas(QGraphicsView):
             if key == Qt.Key.Key_Escape:
                 self._cancel_draft()
                 return
+            if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter) and len(self._draft) >= 2:
+                self._finish_draft()
+                return
             if key == Qt.Key.Key_Backspace:
                 self._draft.pop()
                 if self._draft:
@@ -501,6 +506,9 @@ class Canvas(QGraphicsView):
     def keyReleaseEvent(self, event) -> None:
         if event.key() == Qt.Key.Key_Alt:
             self._set_alt(False)
+            return
+        if event.key() == Qt.Key.Key_Control and len(self._draft) >= 2 and not event.isAutoRepeat():
+            self._finish_draft()  # letting go of Ctrl ends the chain at the last Ctrl+clicked point
             return
         if event.key() == Qt.Key.Key_Space and not event.isAutoRepeat():
             self._space = False
