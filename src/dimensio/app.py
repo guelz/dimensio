@@ -27,6 +27,7 @@ from . import __version__, desktop
 from .canvas import Canvas
 from .model import (
     DEFAULT_COLOR,
+    KINDS,
     Document,
     ImageInfo,
     SidecarError,
@@ -95,10 +96,10 @@ class MainWindow(QMainWindow):
         self.fit_action.setToolTip("Fit the whole picture into the window — F")
         self._action("&Quit", QKeySequence.StandardKey.Quit, self.close)
         self.tools = QActionGroup(self)
-        self.dimension_action = self._action("&Dimension", "1", lambda: self.canvas.set_tool("dimension"))
-        self.level_action = self._action("&Level", "2", lambda: self.canvas.set_tool("level"))
-        self.line_action = self._action("L&ine", "3", lambda: self.canvas.set_tool("line"))
-        self.note_action = self._action("&Note", "4", lambda: self.canvas.set_tool("note"))
+        self.dimension_action = self._action("&Dimension", "1", lambda: self._pick_tool("dimension"))
+        self.level_action = self._action("&Level", "2", lambda: self._pick_tool("level"))
+        self.line_action = self._action("L&ine", "3", lambda: self._pick_tool("line"))
+        self.note_action = self._action("&Note", "4", lambda: self._pick_tool("note"))
         for action, letter, tip in (
             (self.dimension_action, "D", "Click two points (Ctrl+click for a chain), then type"),
             (self.level_action, "L", "Click a spot, type its height (±0.00, +1.25 m …)"),
@@ -166,6 +167,8 @@ class MainWindow(QMainWindow):
             action.setChecked(True)
             action.toggled.connect(self._on_layers_input)
             self.layer_actions[kind] = action
+        self.color_button.setToolTip("Color of the active tool's layer")
+        self.outline_box.setToolTip("Outline for the active tool's layer; switch off for very thin lines")
         layers.setMenu(menu)
         self.layers_button = layers
         bar.addWidget(layers)
@@ -183,33 +186,40 @@ class MainWindow(QMainWindow):
             name = None
         self.setWindowTitle(f"{name}[*] — Dimensio" if name else "Dimensio")
 
+    def _pick_tool(self, tool: str) -> None:
+        self.canvas.set_tool(tool)
+        if self.canvas.doc is not None:
+            self._show_style(self.canvas.doc.style)  # the toolbar shows the new tool's layer
+
     def _show_style(self, style: Style) -> None:
-        for box, value in ((self.width_box, style.line_width), (self.size_box, style.text_size)):
+        """Toolbar = text size, IDs, layers for the picture; width, colour, outline for the active tool's layer."""
+        own = style.layer(self.canvas.tool)
+        for box, value in ((self.width_box, own.line_width), (self.size_box, style.text_size)):
             box.blockSignals(True)
             box.setValue(round(value))
             box.blockSignals(False)
-        checks = [(self.outline_box, style.outline), (self.ids_box, style.ids)]
+        checks = [(self.outline_box, own.outline), (self.ids_box, style.ids)]
         checks += [(action, kind not in style.hidden) for kind, action in self.layer_actions.items()]
         for box, value in checks:
             box.blockSignals(True)
             box.setChecked(value)
             box.blockSignals(False)
         swatch = QPixmap(16, 16)
-        swatch.fill(QColor(style.color))
+        swatch.fill(QColor(own.color))
         self.color_button.setIcon(QIcon(swatch))
 
     # ----- style -----
 
     def _on_size_input(self) -> None:
         if self.canvas.doc is not None:
-            style = replace(self.canvas.doc.style, line_width=self.width_box.value(), text_size=self.size_box.value())
-            self.canvas.set_style(style)
+            style = self.canvas.doc.style.with_layer(self.canvas.tool, line_width=self.width_box.value())
+            self.canvas.set_style(replace(style, text_size=self.size_box.value()))
         self.canvas.setFocus()  # keep Ctrl+Z, Delete, Esc and Space working on the drawing
 
     def _on_outline_input(self, checked: bool) -> None:
         if self.canvas.doc is not None:
-            self.canvas.set_style(replace(self.canvas.doc.style, outline=checked))
-            self.settings.setValue("outline", checked)
+            self.canvas.set_style(self.canvas.doc.style.with_layer(self.canvas.tool, outline=checked))
+            self.settings.setValue(f"outline/{self.canvas.tool}", checked)
         self.canvas.setFocus()
 
     def _on_layers_input(self) -> None:
@@ -227,22 +237,33 @@ class MainWindow(QMainWindow):
     def choose_color(self) -> None:
         if self.canvas.doc is None:
             return
-        color = QColorDialog.getColor(QColor(self.canvas.doc.style.color), self, "Dimension color")
+        tool = self.canvas.tool
+        color = QColorDialog.getColor(QColor(self.canvas.doc.style.layer(tool).color), self, f"Color of the {tool} layer")
         if color.isValid():
             self.set_color(color.name())
         self.canvas.setFocus()
 
     def set_color(self, name: str) -> None:
         name = name.upper()
-        self.canvas.set_style(replace(self.canvas.doc.style, color=name))
-        self.settings.setValue("color", name)
+        self.canvas.set_style(self.canvas.doc.style.with_layer(self.canvas.tool, color=name))
+        self.settings.setValue(f"color/{self.canvas.tool}", name)
 
     def _new_style(self, width: int, height: int) -> Style:
-        """Defaults for a new image, with the colour and outline the user picked last."""
-        color = self.settings.value("color", DEFAULT_COLOR)
-        outline = self.settings.value("outline", True, type=bool)
-        ids = self.settings.value("ids", False, type=bool)
-        return replace(Style.for_image(width, height, color if is_hex_color(color) else DEFAULT_COLOR), outline=outline, ids=ids)
+        """Defaults for a new image, with the colour and outline each layer had last."""
+        color = self.settings.value("color", DEFAULT_COLOR)  # pre-layer setting, still the base
+        base = Style.for_image(width, height, color if is_hex_color(color) else DEFAULT_COLOR)
+        style = replace(base, outline=self.settings.value("outline", True, type=bool), ids=self.settings.value("ids", False, type=bool))
+        for kind in KINDS:
+            layer_color = self.settings.value(f"color/{kind}")
+            layer_outline = self.settings.value(f"outline/{kind}")
+            changes = {}
+            if is_hex_color(layer_color):
+                changes["color"] = layer_color
+            if layer_outline is not None:
+                changes["outline"] = self.settings.value(f"outline/{kind}", True, type=bool)
+            if changes:
+                style = style.with_layer(kind, **changes)
+        return style
 
     # ----- files -----
 

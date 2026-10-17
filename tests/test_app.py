@@ -159,7 +159,7 @@ def test_style_boxes_push_undoable_changes(win, tmp_path):
     win.open_file(make_image(tmp_path / "a.png"))
     before = win.canvas.doc.style
     win.width_box.setValue(7)
-    assert win.canvas.doc.style.line_width == 7
+    assert win.canvas.doc.style.layer("dimension").line_width == 7
     win.undo()
     assert win.canvas.doc.style == before
     assert win.width_box.value() == round(before.line_width)
@@ -168,10 +168,10 @@ def test_style_boxes_push_undoable_changes(win, tmp_path):
 def test_colour_is_remembered_for_the_next_image(win, tmp_path):
     win.open_file(make_image(tmp_path / "a.png"))
     win.set_color("#00ff00")
-    assert win.canvas.doc.style.color == "#00FF00"
+    assert win.canvas.doc.style.layer("dimension").color == "#00FF00"
     win.canvas.undo.setClean()
     win.open_file(make_image(tmp_path / "b.png"))
-    assert win.canvas.doc.style.color == "#00FF00"
+    assert win.canvas.doc.style.layer("dimension").color == "#00FF00"
 
 
 def test_main_installs_the_desktop_entry_without_starting_the_gui(tmp_path, monkeypatch):
@@ -236,14 +236,14 @@ def test_status_bar_explains_zoom_pan_and_undo(win):
 def test_outline_checkbox_is_undoable_and_remembered(win, tmp_path):
     win.open_file(make_image(tmp_path / "a.png"))
     win.outline_box.setChecked(False)
-    assert win.canvas.doc.style.outline is False
+    assert win.canvas.doc.style.layer("dimension").outline is False
     win.undo()
-    assert win.canvas.doc.style.outline is True
+    assert win.canvas.doc.style.layer("dimension").outline is True
     assert win.outline_box.isChecked()
     win.redo()
     win.canvas.undo.setClean()
     win.open_file(make_image(tmp_path / "b.png"))
-    assert win.canvas.doc.style.outline is False
+    assert win.canvas.doc.style.layer("dimension").outline is False
     assert not win.outline_box.isChecked()
 
 
@@ -331,3 +331,15 @@ def test_f_fits_the_picture(win, tmp_path):
     win.fit_action.trigger()
     assert [s.toString() for s in win.fit_action.shortcuts()] == ["F"]
     assert win.canvas.transform().m11() == pytest.approx(fitted)
+
+
+def test_toolbar_edits_the_layer_of_the_active_tool(win, tmp_path):
+    win.open_file(make_image(tmp_path / "a.png"))
+    win.line_action.trigger()
+    win.set_color("#0000ff")
+    win.width_box.setValue(9)
+    style = win.canvas.doc.style
+    assert style.layer("line").color == "#0000FF" and style.layer("line").line_width == 9
+    assert style.layer("dimension").color != "#0000FF" and style.layer("dimension").line_width != 9
+    win.dimension_action.trigger()
+    assert win.width_box.value() == round(style.layer("dimension").line_width)

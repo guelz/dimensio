@@ -73,3 +73,12 @@ def test_outline_toggle_is_its_own_undo_step(qapp):
     stack.push(ChangeStyle(host, s0, s1))
     stack.push(ChangeStyle(host, s1, replace(s1, outline=False)))
     assert stack.count() == 2
+
+
+def test_colour_changes_on_different_layers_are_separate_undo_steps(qapp):
+    host, stack = FakeHost(), QUndoStack()
+    s0 = host.style
+    s1 = s0.with_layer("dimension", color="#00FF00")
+    stack.push(ChangeStyle(host, s0, s1))
+    stack.push(ChangeStyle(host, s1, s1.with_layer("line", color="#0000FF")))
+    assert stack.count() == 2

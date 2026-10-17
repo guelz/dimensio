@@ -8,7 +8,7 @@ import json
 import math
 import os
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 SIDECAR_VERSION = 1
@@ -29,6 +29,18 @@ def is_hex_color(value: object) -> bool:
 
 
 @dataclass(frozen=True)
+class LayerStyle:
+    """What each layer (kind) can set for itself."""
+
+    line_width: float
+    color: str = DEFAULT_COLOR
+    outline: bool = True
+
+
+LAYER_FIELDS = ("line_width", "color", "outline")
+
+
+@dataclass(frozen=True)
 class Style:
     line_width: float
     text_size: float
@@ -36,6 +48,21 @@ class Style:
     outline: bool = True  # contrasting halo under lines and text
     ids: bool = False  # draw the A, B, … / L1, … names next to the labels
     hidden: tuple[str, ...] = ()  # kinds (see KINDS) left out of the view and the export
+    # Per-kind line width / colour / outline; a kind without an entry uses the fields above.
+    layers: tuple[tuple[str, LayerStyle], ...] = ()
+
+    def layer(self, kind: str) -> LayerStyle:
+        return dict(self.layers).get(kind, LayerStyle(self.line_width, self.color, self.outline))
+
+    def for_kind(self, kind: str) -> Style:
+        """This style as seen by one layer: its own width, colour and outline."""
+        own = self.layer(kind)
+        return replace(self, line_width=own.line_width, color=own.color, outline=own.outline)
+
+    def with_layer(self, kind: str, **changes) -> Style:
+        layers = dict(self.layers)
+        layers[kind] = replace(self.layer(kind), **changes)
+        return replace(self, layers=tuple(sorted(layers.items(), key=lambda kv: KINDS.index(kv[0]))))
 
     @classmethod
     def for_image(cls, width: int, height: int, color: str = DEFAULT_COLOR) -> Style:
@@ -219,6 +246,10 @@ def to_json(doc: Document, visible_only: bool = False) -> dict:
         "ids": doc.style.ids,
         "hidden": list(doc.style.hidden),
     }
+    if doc.style.layers:
+        data["style"]["layers"] = {
+            kind: {"line_width": s.line_width, "color": s.color, "outline": s.outline} for kind, s in doc.style.layers
+        }
     data["dimensions"] = []
     levels, lines, notes = [], [], []
     for d, name in zip(doc.dimensions, annotation_ids(doc.dimensions)):
@@ -280,7 +311,15 @@ def from_json(data: object) -> Document:
         if not isinstance(hidden, list) or not set(hidden) <= set(KINDS):
             raise ValueError(f"bad hidden layers {hidden!r}")
         hidden = tuple(k for k in KINDS if k in hidden)
-        style = Style(_positive(style_data["line_width"]), _positive(style_data["text_size"]), color, outline, ids, hidden)
+        layers = []
+        for kind, v in style_data.get("layers", {}).items():
+            if kind not in KINDS or not is_hex_color(v["color"]) or not isinstance(v["outline"], bool):
+                raise ValueError(f"bad layer {kind!r}")
+            layers.append((kind, LayerStyle(_positive(v["line_width"]), v["color"], v["outline"])))
+        layers.sort(key=lambda kv: KINDS.index(kv[0]))
+        style = Style(
+            _positive(style_data["line_width"]), _positive(style_data["text_size"]), color, outline, ids, hidden, tuple(layers)
+        )
         dimensions = [
             Dimension(
                 tuple(_point(p) for p in d["points"]),

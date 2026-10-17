@@ -190,3 +190,14 @@ def test_hidden_layers_are_not_exported(qapp):
     line = Line(((50.0, 150.0), (350.0, 150.0)))
     out = export_image(blank(), Document(style=Style(4, 20, "#FF0000", hidden=("line",)), dimensions=[line]))
     assert is_white(out.pixelColor(200, 150))
+
+
+def test_each_layer_has_its_own_colour(qapp):
+    from dimensio.model import Line
+
+    style = Style(4, 20, "#FF0000").with_layer("line", color="#0000FF")
+    out = export_image(blank(), Document(style=style, dimensions=[Line(((50.0, 250.0), (350.0, 250.0))),
+                                                                   Dimension(((50.0, 100.0), (350.0, 100.0)), ("a",))]))
+    blue = out.pixelColor(200, 250)
+    assert blue.blue() > 200 and blue.red() < 80
+    assert is_red(out.pixelColor(200, 100))

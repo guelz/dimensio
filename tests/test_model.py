@@ -301,3 +301,24 @@ def test_unknown_layer_name_is_rejected():
     data = {"version": 1, "style": {"line_width": 2, "text_size": 10, "color": "#FFC400", "hidden": ["walls"]}, "dimensions": []}
     with pytest.raises(SidecarError):
         from_json(data)
+
+
+def test_layers_fall_back_to_the_base_style_and_override_per_kind(tmp_path):
+    from dimensio.model import LayerStyle
+
+    base = Style(2, 10, "#FFC400", True)
+    assert base.layer("line") == LayerStyle(2, "#FFC400", True)
+    style = base.with_layer("line", color="#0000FF", outline=False)
+    assert style.layer("line") == LayerStyle(2, "#0000FF", False)
+    assert style.layer("dimension") == LayerStyle(2, "#FFC400", True)
+    assert style.for_kind("line").color == "#0000FF" and style.for_kind("line").text_size == 10
+    path = tmp_path / "x.dims.json"
+    save_sidecar(Document(style), path)
+    assert load_sidecar(path).style == style
+
+
+def test_bad_layer_is_rejected():
+    data = {"version": 1, "style": {"line_width": 2, "text_size": 10, "color": "#FFC400",
+            "layers": {"line": {"line_width": 0, "color": "#0000FF", "outline": True}}}, "dimensions": []}
+    with pytest.raises(SidecarError):
+        from_json(data)

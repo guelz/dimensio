@@ -6,7 +6,7 @@ from typing import Protocol
 
 from PySide6.QtGui import QUndoCommand
 
-from .model import Dimension, Style
+from .model import KINDS, LAYER_FIELDS, Dimension, Style
 
 STYLE_MERGE_ID = 1
 
@@ -55,7 +55,12 @@ class ChangeDimension(QUndoCommand):
 
 
 def _changed_fields(old: Style, new: Style) -> frozenset[str]:
-    return frozenset(f for f in ("line_width", "text_size", "color", "outline", "ids", "hidden") if getattr(old, f) != getattr(new, f))
+    """What changed, per layer, so that e.g. two colour changes on different layers stay two undo steps."""
+    fields = {f for f in ("text_size", "ids", "hidden") if getattr(old, f) != getattr(new, f)}
+    for kind in KINDS:
+        a, b = old.layer(kind), new.layer(kind)
+        fields |= {f"{kind}.{f}" for f in LAYER_FIELDS if getattr(a, f) != getattr(b, f)}
+    return frozenset(fields)
 
 
 class ChangeStyle(QUndoCommand):

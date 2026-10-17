@@ -258,6 +258,7 @@ def export_image(image: QImage, doc: Document) -> QImage:
     tags = annotation_ids(doc.dimensions) if doc.style.ids else [""] * len(doc.dimensions)
     for dim, tag in zip(doc.dimensions, tags):
         if kind_of(dim) not in doc.style.hidden:
-            paint_dimension(painter, build_paths(dim, doc.style, tag), doc.style)
+            style = doc.style.for_kind(kind_of(dim))
+            paint_dimension(painter, build_paths(dim, style, tag), style)
     painter.end()
     return out

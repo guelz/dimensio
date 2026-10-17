@@ -10,7 +10,7 @@ from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QPainterPath, QPainterPathStroker, QPalette, QPen, QPolygonF
 from PySide6.QtWidgets import QApplication, QGraphicsEllipseItem, QGraphicsItem
 
-from .model import Annotation, Dimension, Level, Line, Note, Point, Style
+from .model import Annotation, Dimension, Level, Line, Note, Point, Style, kind_of
 from .render import DimensionPaths, build_paths, halo_width, paint_dimension
 
 if TYPE_CHECKING:
@@ -37,9 +37,10 @@ class PathsItem(QGraphicsItem):
     def __init__(self, dim: Annotation, style: Style) -> None:
         super().__init__()
         self._dim = dim
-        self._style = style
+        self._doc_style = style
+        self._style = style.for_kind(kind_of(dim))  # this item's layer
         self.tag = ""  # name drawn next to the first label when IDs are shown
-        self._paths = build_paths(dim, style)
+        self._paths = build_paths(dim, self._style)
         self._margin = 0.0
 
     @property
@@ -54,7 +55,8 @@ class PathsItem(QGraphicsItem):
         self.prepareGeometryChange()
         self._dim = dim
         if style is not None:
-            self._style = style
+            self._doc_style = style
+        self._style = self._doc_style.for_kind(kind_of(dim))
         self._paths = build_paths(dim, self._style, self.tag)
         self.update()
 
