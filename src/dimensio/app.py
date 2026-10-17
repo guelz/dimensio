@@ -47,7 +47,7 @@ from .render import EMBED_KEY, ImageLoadError, load_image, read_embedded, save_i
 IMAGE_FILTER = "Images (*.jpg *.jpeg *.png *.webp *.tif *.tiff *.bmp *.heic *.heif *.avif);;All files (*)"
 SAVE_FILTER = "PNG image (*.png);;JPEG image (*.jpg *.jpeg)"
 HINT = (
-    "1-4: dimension, level, line, note (each edits only its own kind) · Click, click, type · Ctrl+click: chain · Shift: straight · Esc: cancel · "
+    "1-5: dimension, level, line, note, circle (each edits only its own kind) · Click, click, type · Ctrl+click: chain · Shift: straight · Esc: cancel · "
     "Double-click label: edit · "
     "Ctrl+scroll: zoom · Middle or Space+drag: pan · F: fit · Ctrl+Z / Ctrl+Shift+Z: undo / redo"
 )
@@ -100,11 +100,13 @@ class MainWindow(QMainWindow):
         self.level_action = self._action("&Level", "2", lambda: self._pick_tool("level"))
         self.line_action = self._action("L&ine", "3", lambda: self._pick_tool("line"))
         self.note_action = self._action("&Note", "4", lambda: self._pick_tool("note"))
+        self.circle_action = self._action("&Circle", "5", lambda: self._pick_tool("circle"))
         for action, letter, tip in (
             (self.dimension_action, "D", "Click two points (Ctrl+click for a chain), then type"),
             (self.level_action, "L", "Click a spot, type its height (±0.00, +1.25 m …)"),
             (self.line_action, None, "Click two points (Ctrl+click for more), a plain line"),
             (self.note_action, "T", "Click what you mean, type a note; drag the text where it fits"),
+            (self.circle_action, "C", "Click the centre, then the edge; type Ø 40 or R 20, or nothing for a plain circle"),
         ):
             if letter:
                 action.setShortcuts([action.shortcut(), QKeySequence(letter)])
@@ -132,7 +134,7 @@ class MainWindow(QMainWindow):
         for action in (self.open_action, self.save_action, self.copy_action, self.fit_action):
             bar.addAction(action)
         bar.addSeparator()
-        for action in (self.dimension_action, self.level_action, self.line_action, self.note_action):
+        for action in (self.dimension_action, self.level_action, self.line_action, self.note_action, self.circle_action):
             bar.addAction(action)
         bar.addSeparator()
         bar.addWidget(QLabel(" Line width "))
@@ -161,7 +163,7 @@ class MainWindow(QMainWindow):
         layers.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         menu = QMenu(layers)
         self.layer_actions = {}
-        for kind, title in (("dimension", "Dimensions"), ("level", "Levels"), ("line", "Lines"), ("note", "Notes")):
+        for kind, title in (("dimension", "Dimensions"), ("level", "Levels"), ("line", "Lines"), ("note", "Notes"), ("circle", "Circles")):
             action = menu.addAction(title)
             action.setCheckable(True)
             action.setChecked(True)

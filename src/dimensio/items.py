@@ -10,7 +10,7 @@ from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QPainterPath, QPainterPathStroker, QPalette, QPen, QPolygonF
 from PySide6.QtWidgets import QApplication, QGraphicsEllipseItem, QGraphicsItem
 
-from .model import Annotation, Dimension, Level, Line, Note, Point, Style, kind_of
+from .model import Annotation, Circle, Dimension, Level, Line, Note, Point, Style, kind_of
 from .render import DimensionPaths, build_paths, halo_width, paint_dimension
 
 if TYPE_CHECKING:
@@ -353,7 +353,41 @@ class NoteItem(EditableItem):
         return self._paths.strokes
 
 
-_ITEM_TYPES = {Level: LevelItem, Line: LineItem, Note: NoteItem}
+class CircleItem(EditableItem):
+    """Dragging or the centre handle moves the circle; the edge handle sets radius and line direction."""
+
+    def handle_points(self) -> tuple[Point, ...]:
+        return (self._dim.center, self._dim.edge)
+
+    def with_point(self, index: int, point: Point) -> Circle:
+        if index == 1:
+            return replace(self._dim, edge=point)
+        return self.dragged(self._dim, point[0] - self._dim.center[0], point[1] - self._dim.center[1])
+
+    def dragged(self, start: Circle, dx: float, dy: float) -> Circle:
+        (cx, cy), (ex, ey) = start.center, start.edge
+        return replace(start, center=(cx + dx, cy + dy), edge=(ex + dx, ey + dy))
+
+    def _grab_lines(self) -> QPainterPath:
+        return self._paths.strokes
+
+    def field_at(self, pos: QPointF) -> int:
+        return 0
+
+    def field_info(self, field: int) -> FieldInfo:
+        lay = self._paths.layout
+        r = lay.radius
+        area = QRectF(lay.center[0] - r, lay.center[1] - r, 2 * r, 2 * r)
+        return FieldInfo("Ø", "Ø 40 or R 20 (optional)", lay.text_anchor, False, area)
+
+    def _highlight_path(self, field: int) -> QPainterPath:
+        lay = self._paths.layout
+        path = QPainterPath()
+        path.addEllipse(QPointF(*lay.center), lay.radius, lay.radius)
+        return path
+
+
+_ITEM_TYPES = {Level: LevelItem, Line: LineItem, Note: NoteItem, Circle: CircleItem}
 
 
 def make_item(canvas: Canvas, dim: Annotation, style: Style) -> EditableItem:

@@ -194,3 +194,26 @@ def test_note_text_sits_at_the_offset_and_the_arrow_points_at_the_spot():
     left = note_layout(Note((100.0, 200.0), "pipe", (-60.0, -80.0)), W, S)
     assert not left.text_right
     assert note_layout(Note((100.0, 200.0), "pipe", (0.0, 0.0)), W, S).arrow is None
+
+
+def test_circle_without_text_is_just_a_circle_with_a_centre_cross():
+    from dimensio.geometry import circle_layout
+    from dimensio.model import Circle
+
+    lay = circle_layout(Circle((100.0, 100.0), (160.0, 180.0)), W, S)
+    assert lay.radius == pytest.approx(100.0)
+    (a, b), (c, d) = lay.cross
+    assert ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2) == (100.0, 100.0)
+    assert lay.arrows == () and lay.line is None
+
+
+def test_circle_text_gives_a_diameter_line_unless_it_starts_with_r():
+    from dimensio.geometry import circle_layout
+    from dimensio.model import Circle
+
+    dia = circle_layout(Circle((100.0, 100.0), (200.0, 100.0), "Ø 80"), W, S)
+    assert sorted(tip for tip, _, _ in dia.arrows) == [(0.0, 100.0), (200.0, 100.0)]  # tips on both edges
+    assert dia.text_anchor[1] < 100.0 and dia.text_anchor[0] > 100.0  # above the line, beside the cross
+    rad = circle_layout(Circle((100.0, 100.0), (200.0, 100.0), "r 40"), W, S)
+    assert [tip for tip, _, _ in rad.arrows] == [(200.0, 100.0)]  # one arrow, at the edge
+    assert rad.line[0] == (100.0, 100.0)  # from the centre

@@ -21,8 +21,8 @@ from PySide6.QtGui import (
     QTransform,
 )
 
-from .geometry import Layout, LevelLayout, NoteLayout, layout, level_layout, note_layout
-from .model import Annotation, Dimension, Document, Level, Line, Note, Style, annotation_ids, kind_of
+from .geometry import CircleLayout, Layout, LevelLayout, NoteLayout, circle_layout, layout, level_layout, note_layout
+from .model import Annotation, Circle, Dimension, Document, Level, Line, Note, Style, annotation_ids, kind_of
 
 ALLOCATION_LIMIT_MB = 1024  # Qt's default of 256 MB refuses photos above ~64 MP
 EMBED_KEY = "dimensio"  # PNG text chunk holding the sidecar JSON in exported images
@@ -84,7 +84,7 @@ class DimensionPaths:
     strokes: QPainterPath  # centre lines (dimension and extension lines), stroked with the line width
     fills: QPainterPath  # arrowheads and label glyphs, filled
     label_boxes: list[QPolygonF]  # one rotated box per segment label, for hit tests and the editor
-    layout: Layout | LevelLayout | NoteLayout | None  # None for plain lines
+    layout: Layout | LevelLayout | NoteLayout | CircleLayout | None  # None for plain lines
     angle_boxes: list[QPolygonF | None] = field(default_factory=list)  # per corner; None = no angle text
 
 
@@ -96,7 +96,39 @@ def build_paths(item: Annotation, style: Style, tag: str = "") -> DimensionPaths
         return _line_paths(item, style, tag)
     if isinstance(item, Note):
         return _note_paths(item, style, tag)
+    if isinstance(item, Circle):
+        return _circle_paths(item, style, tag)
     return _dimension_paths(item, style, tag)
+
+
+def _circle_paths(circle: Circle, style: Style, tag: str = "") -> DimensionPaths:
+    lay = circle_layout(circle, style.line_width, style.text_size)
+    strokes, fills = QPainterPath(), QPainterPath()
+    strokes.addEllipse(QPointF(*lay.center), lay.radius, lay.radius)
+    for a, b in lay.cross:
+        strokes.moveTo(*a)
+        strokes.lineTo(*b)
+    if lay.line is not None:
+        strokes.moveTo(*lay.line[0])
+        strokes.lineTo(*lay.line[1])
+    for tip, left, right in lay.arrows:
+        fills.addPolygon(QPolygonF([QPointF(*tip), QPointF(*left), QPointF(*right)]))
+        fills.closeSubpath()
+    font = label_font(style.text_size)
+    metrics = QFontMetricsF(font)
+    transform = QTransform()
+    transform.translate(*lay.text_anchor)
+    transform.rotate(lay.text_angle)
+    width = metrics.horizontalAdvance(lay.label)
+    box_width = max(width, style.text_size)
+    box = transform.map(QPolygonF(QRectF(-box_width / 2, -metrics.height(), box_width, metrics.height())))
+    if lay.label:
+        text = QPainterPath()
+        text.addText(-width / 2, -metrics.descent(), font, lay.label)
+        fills.addPath(transform.map(text))
+    if tag:
+        _add_tag(strokes, fills, tag, style, transform, -box_width / 2, -metrics.height() / 2, -1)
+    return DimensionPaths(strokes, fills, [box], lay)
 
 
 def _line_paths(line: Line, style: Style, tag: str = "") -> DimensionPaths:

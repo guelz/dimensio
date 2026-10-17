@@ -127,13 +127,27 @@ class Note:
     offset: Point = (0.0, 0.0)
 
 
-Annotation = Dimension | Level | Line | Note
+@dataclass(frozen=True)
+class Circle:
+    """A circle around `center` through `edge`. A label adds a measurement line towards `edge`:
+    a radius line if the label starts with R, otherwise a diameter line."""
 
-KINDS = ("dimension", "level", "line", "note")  # one layer per kind, edited by the tool of that name
+    center: Point
+    edge: Point
+    label: str = ""
+
+    @property
+    def radius(self) -> float:
+        return math.dist(self.center, self.edge)
+
+
+Annotation = Dimension | Level | Line | Note | Circle
+
+KINDS = ("dimension", "level", "line", "note", "circle")  # one layer per kind, edited by the tool of that name
 
 
 def kind_of(item: Annotation) -> str:
-    return {Dimension: "dimension", Level: "level", Line: "line", Note: "note"}[type(item)]
+    return {Dimension: "dimension", Level: "level", Line: "line", Note: "note", Circle: "circle"}[type(item)]
 
 
 @dataclass(frozen=True)
@@ -197,8 +211,12 @@ ABOUT = {
     "levels": "point is the marked spot; label is its height text; offset only moves the drawn symbol",
     "lines": "plain polylines through points, without meaning beyond what the picture shows",
     "notes": "free text pointing at point (the arrowhead); the text sits at point + offset",
+    "circles": (
+        "center and edge define the circle; label, if any, is its measurement text: starting with R it is drawn "
+        "on a radius line from center to edge, otherwise on a diameter line through center towards edge"
+    ),
     "ids": (
-        "A, B, C, ... name the dimensions, L1, ... the levels, N1, ... the lines and T1, ... the notes, "
+        "A, B, C, ... name the dimensions, L1, ... the levels, N1, ... the lines, T1, ... the notes and C1, ... the circles, "
         "as tagged on the image when ids are shown"
     ),
     "labels": "free text typed by a person; Dimensio does not measure anything",
@@ -208,8 +226,8 @@ ABOUT = {
 def annotation_ids(items) -> list[str]:
     """Names in drawing order: dimensions A, B, …, Z, AA, AB, …; levels L1, …; lines N1, …; notes T1, …"""
     names, letters = [], 0
-    counts = {"L": 0, "N": 0, "T": 0}
-    prefixes = {Level: "L", Line: "N", Note: "T"}
+    counts = {"L": 0, "N": 0, "T": 0, "C": 0}
+    prefixes = {Level: "L", Line: "N", Note: "T", Circle: "C"}
     for item in items:
         prefix = prefixes.get(type(item))
         if prefix is not None:
@@ -251,7 +269,7 @@ def to_json(doc: Document, visible_only: bool = False) -> dict:
             kind: {"line_width": s.line_width, "color": s.color, "outline": s.outline} for kind, s in doc.style.layers
         }
     data["dimensions"] = []
-    levels, lines, notes = [], [], []
+    levels, lines, notes, circles = [], [], [], []
     for d, name in zip(doc.dimensions, annotation_ids(doc.dimensions)):
         if visible_only and kind_of(d) in doc.style.hidden:
             continue
@@ -264,11 +282,14 @@ def to_json(doc: Document, visible_only: bool = False) -> dict:
         if isinstance(d, Note):
             notes.append({"id": name, "point": list(d.point), "label": d.label, "offset": list(d.offset)})
             continue
+        if isinstance(d, Circle):
+            circles.append({"id": name, "center": list(d.center), "edge": list(d.edge), "label": d.label})
+            continue
         entry = {"id": name, "points": [list(p) for p in d.points], "labels": list(d.labels), "offset": list(d.offset)}
         if any(d.angles):  # only stored when something was typed
             entry["angles"] = list(d.angles)
         data["dimensions"].append(entry)
-    for key, entries in (("levels", levels), ("lines", lines), ("notes", notes)):
+    for key, entries in (("levels", levels), ("lines", lines), ("notes", notes), ("circles", circles)):
         if entries:
             data[key] = entries
     return data
@@ -335,6 +356,9 @@ def from_json(data: object) -> Document:
         dimensions += [Line(tuple(_point(p) for p in v["points"])) for v in data.get("lines", [])]
         dimensions += [
             Note(_point(v["point"]), str(v["label"]), _point(v["offset"])) for v in data.get("notes", [])
+        ]
+        dimensions += [
+            Circle(_point(v["center"]), _point(v["edge"]), str(v["label"])) for v in data.get("circles", [])
         ]
         image = None
         if "image" in data:

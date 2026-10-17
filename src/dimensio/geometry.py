@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from .model import Dimension, Level, Note, Point
+from .model import Circle, Dimension, Level, Note, Point
 
 ARROW_HALF_ANGLE = math.radians(15)
 ANGLE_RADIUS_LEG = 0.4  # arc radius as a share of the shorter leg ...
@@ -119,6 +119,47 @@ def note_layout(note: Note, line_width: float, text_size: float) -> NoteLayout:
         ux, uy = _unit(note.point, attach)
         arrow = _arrow(note.point, ux, uy, arrow_length(line_width, text_size))
     return NoteLayout(note.point, attach, arrow, dx >= 0, text_gap(line_width, text_size), note.label)
+
+
+@dataclass(frozen=True)
+class CircleLayout:
+    center: Point
+    radius: float
+    cross: tuple[tuple[Point, Point], tuple[Point, Point]]  # always marks the centre
+    line: tuple[Point, Point] | None  # visible measurement line, None without a label
+    arrows: tuple[Triangle, ...]  # tips on the circle: both ends (diameter) or the edge (radius)
+    text_anchor: Point  # bottom-centre of the label, also where the editor opens
+    text_angle: float
+    is_radius: bool
+    label: str
+
+
+def circle_layout(circle: Circle, line_width: float, text_size: float) -> CircleLayout:
+    w, s = line_width, text_size
+    (cx, cy), r = circle.center, circle.radius
+    ux, uy = _unit(circle.center, circle.edge)
+    half = max(0.25 * s, 3 * w)
+    cross = (((cx - half, cy), (cx + half, cy)), ((cx, cy - half), (cx, cy + half)))
+    edge = (cx + ux * r, cy + uy * r)
+    opposite = (cx - ux * r, cy - uy * r)
+    is_radius = circle.label.strip().upper().startswith("R")
+    start = circle.center if is_radius else opposite
+    angle = reading_angle(start, edge)
+    rad = math.radians(angle)
+    gap = text_gap(w, s)
+    mid = ((cx + edge[0]) / 2, (cy + edge[1]) / 2)  # the edge-side half, clear of the centre cross
+    text_anchor = (mid[0] + math.sin(rad) * gap, mid[1] - math.cos(rad) * gap)
+    line, arrows = None, ()
+    if circle.label:
+        arrow_len = arrow_length(w, s)
+        end = (edge[0] - ux * arrow_len, edge[1] - uy * arrow_len) if r > arrow_len else edge
+        if is_radius:
+            line, arrows = (circle.center, end), (_arrow(edge, -ux, -uy, arrow_len),)
+        else:
+            begin = (opposite[0] + ux * arrow_len, opposite[1] + uy * arrow_len) if r > arrow_len else opposite
+            line = (begin, end)
+            arrows = (_arrow(opposite, ux, uy, arrow_len), _arrow(edge, -ux, -uy, arrow_len))
+    return CircleLayout(circle.center, r, cross, line, arrows, text_anchor, angle, is_radius, circle.label)
 
 
 def _unit(p: Point, q: Point) -> Point:

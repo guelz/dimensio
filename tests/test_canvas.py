@@ -450,3 +450,20 @@ def test_hidden_layer_disappears_and_its_tool_brings_it_back(canvas):
     assert not canvas.dimension_items()[0].isVisible()
     canvas.set_tool("line")
     assert canvas.doc.style.hidden == () and canvas.dimension_items()[0].isVisible()
+
+
+def test_circle_tool_centre_then_edge_then_optional_text(canvas, qtbot):
+    from dimensio.model import Circle
+
+    canvas.set_tool("circle")
+    click(canvas, 200, 150)
+    click(canvas, 260, 150)
+    editor = canvas.label_editor()
+    assert editor.prefix() == "Ø"
+    qtbot.keyClick(editor, Qt.Key.Key_Return)  # no text: still a circle
+    [circle] = canvas.doc.dimensions
+    assert isinstance(circle, Circle) and circle.label == ""
+    assert circle.radius == pytest.approx(60, abs=1.0)
+    drag(canvas, (200, 90), (220, 90))  # grab the circle's top and move it
+    [moved] = canvas.doc.dimensions
+    assert moved.center == pytest.approx((220, 150), abs=1.0) and moved.radius == pytest.approx(circle.radius)

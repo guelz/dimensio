@@ -11,7 +11,7 @@ from PySide6.QtWidgets import QGraphicsScene, QGraphicsView, QLineEdit, QWidget
 
 from .commands import AddDimension, ChangeDimension, ChangeStyle, RemoveDimension
 from .items import EditableItem, HandleItem, PathsItem, make_item
-from .model import Annotation, Dimension, Document, Level, Line, Note, Point, Style, annotation_ids, kind_of
+from .model import Annotation, Circle, Dimension, Document, Level, Line, Note, Point, Style, annotation_ids, kind_of
 from .render import export_image
 
 HIT_TOLERANCE = 6  # screen pixels around a dimension line that still grab it
@@ -73,17 +73,17 @@ class _LabelEdit:
 def _field_count(dim: Annotation) -> int:
     if isinstance(dim, Line):
         return 0
-    return 1 if isinstance(dim, (Level, Note)) else len(dim.labels) + len(dim.angles)
+    return 1 if isinstance(dim, (Level, Note, Circle)) else len(dim.labels) + len(dim.angles)
 
 
 def _field_text(dim: Annotation, field: int) -> str:
-    if isinstance(dim, (Level, Note)):
+    if isinstance(dim, (Level, Note, Circle)):
         return dim.label
     return dim.labels[field // 2] if field % 2 == 0 else dim.angles[field // 2]
 
 
 def _with_field(dim: Annotation, field: int, text: str) -> Annotation:
-    if isinstance(dim, (Level, Note)):
+    if isinstance(dim, (Level, Note, Circle)):
         return replace(dim, label=text)
     if field % 2 == 0:
         labels = list(dim.labels)
@@ -352,7 +352,8 @@ class Canvas(QGraphicsView):
             return
         self._draft.append(point)
         self._cursor = None
-        if len(self._draft) >= 2 and not (modifiers & Qt.KeyboardModifier.ControlModifier):
+        circle_done = self.tool == "circle" and len(self._draft) == 2  # centre, edge: no chains
+        if circle_done or (len(self._draft) >= 2 and not (modifiers & Qt.KeyboardModifier.ControlModifier)):
             self._finish_draft()
         else:
             self._update_preview()
@@ -362,7 +363,12 @@ class Canvas(QGraphicsView):
         if len(points) < 2:
             self._remove_preview()
             return
-        dim = Line(tuple(points)) if self.tool == "line" else Dimension.new(points)
+        if self.tool == "circle":
+            dim = Circle(points[0], points[-1])
+        elif self.tool == "line":
+            dim = Line(tuple(points))
+        else:
+            dim = Dimension.new(points)
         if self._preview is None:
             self._preview = PathsItem(dim, self.doc.style)
             self._preview.setZValue(3)
@@ -385,6 +391,10 @@ class Canvas(QGraphicsView):
         self._cancel_draft()
         if self.tool == "line":  # nothing to label
             self.undo.push(AddDimension(self, len(self._items), Line(tuple(points))))
+            return
+        if self.tool == "circle":
+            self.insert_dimension(len(self._items), Circle(points[0], points[1]))
+            self._start_label_edit(self._items[-1], 0, is_new=True)
             return
         # The new dimension is shown at once but only becomes an undo step when its labels are confirmed.
         self.insert_dimension(len(self._items), Dimension.new(points))

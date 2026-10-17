@@ -322,3 +322,14 @@ def test_bad_layer_is_rejected():
             "layers": {"line": {"line_width": 0, "color": "#0000FF", "outline": True}}}, "dimensions": []}
     with pytest.raises(SidecarError):
         from_json(data)
+
+
+def test_circles_round_trip_with_their_own_ids(tmp_path):
+    from dimensio.model import Circle, annotation_ids, kind_of
+
+    circle = Circle((100.0, 100.0), (140.0, 100.0), "Ø 80")
+    assert kind_of(circle) == "circle" and circle.radius == 40.0
+    assert annotation_ids([circle, Dimension(((0.0, 0.0), (1.0, 0.0)), ("a",)), circle]) == ["C1", "A", "C2"]
+    path = tmp_path / "x.dims.json"
+    save_sidecar(Document(Style(2, 10), [circle]), path)
+    assert load_sidecar(path).dimensions == [circle]

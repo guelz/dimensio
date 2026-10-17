@@ -343,3 +343,11 @@ def test_toolbar_edits_the_layer_of_the_active_tool(win, tmp_path):
     assert style.layer("dimension").color != "#0000FF" and style.layer("dimension").line_width != 9
     win.dimension_action.trigger()
     assert win.width_box.value() == round(style.layer("dimension").line_width)
+
+
+def test_circle_tool_and_layer_exist(win, tmp_path):
+    win.open_file(make_image(tmp_path / "a.png"))
+    win.circle_action.trigger()
+    assert win.canvas.tool == "circle"
+    assert "circle" in win.layer_actions
+    assert {s.toString() for s in win.circle_action.shortcuts()} == {"5", "C"}

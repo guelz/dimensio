@@ -201,3 +201,13 @@ def test_each_layer_has_its_own_colour(qapp):
     blue = out.pixelColor(200, 250)
     assert blue.blue() > 200 and blue.red() < 80
     assert is_red(out.pixelColor(200, 100))
+
+
+def test_circle_draws_its_measurement_line_only_with_text(qapp):
+    from dimensio.model import Circle
+
+    plain = export_image(blank(), Document(style=STYLE, dimensions=[Circle((200.0, 150.0), (300.0, 150.0))]))
+    assert is_red(plain.pixelColor(300, 150)) and is_red(plain.pixelColor(200, 50))  # on the circle
+    assert is_white(plain.pixelColor(250, 150))  # no line inside
+    measured = export_image(blank(), Document(style=STYLE, dimensions=[Circle((200.0, 150.0), (300.0, 150.0), "Ø 20")]))
+    assert is_red(measured.pixelColor(250, 150))
