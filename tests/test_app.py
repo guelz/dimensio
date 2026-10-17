@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -37,7 +38,7 @@ def add_dimension(win):
     canvas.undo.push(AddDimension(canvas, len(canvas.doc.dimensions), DIM))
 
 
-def test_save_writes_flat_png_and_sidecar(win, tmp_path):
+def test_save_writes_only_the_png_unless_json_is_ticked(win, tmp_path):
     photo = make_image(tmp_path / "photo.png")
     assert win.open_file(photo)
     add_dimension(win)
@@ -45,8 +46,12 @@ def test_save_writes_flat_png_and_sidecar(win, tmp_path):
     assert win.save()
     out = tmp_path / "photo_dims.png"
     assert QImage(str(out)).size() == QSize(200, 100)
-    assert load_sidecar(sidecar_path(photo)).dimensions == [DIM]
+    assert not sidecar_path(photo).exists()
     assert not win.isWindowModified()
+    win.json_box.setChecked(True)
+    add_dimension(win)
+    win.save()
+    assert load_sidecar(sidecar_path(photo)).dimensions == [DIM, DIM]
 
 
 def test_reopening_restores_dimensions(win, tmp_path):
@@ -186,6 +191,7 @@ def test_newer_or_broken_sidecar_is_never_overwritten(win, tmp_path):
     photo = make_image(tmp_path / "photo.png")
     side = sidecar_path(photo)
     side.write_text('{"version": 2}', encoding="utf-8")
+    win.json_box.setChecked(True)
     win.open_file(photo)
     add_dimension(win)
     assert win.save()
@@ -271,7 +277,7 @@ def test_exported_png_reopens_from_its_own_data_without_the_sidecar(win, tmp_pat
     win.open_file(photo)
     add_dimension(win)
     win.save()
-    sidecar_path(photo).unlink()
+    assert not sidecar_path(photo).exists()
     win.open_file(tmp_path / "photo_dims.png")
     assert win.source == photo
     assert win.canvas.doc.dimensions == [DIM]
@@ -369,3 +375,43 @@ def test_holding_alt_shows_snap_paused(win, tmp_path, qtbot):
     assert "Alt" in win.snap_status.text()
     qtbot.keyRelease(win.canvas, Qt.Key.Key_Alt)
     assert win.snap_status.text() == "⌖ Snap on"
+
+
+def test_save_as_elsewhere_keeps_the_photo_folder_clean_and_stays_editable(win, tmp_path, monkeypatch):
+    origin, elsewhere = tmp_path / "origin", tmp_path / "exports"
+    origin.mkdir()
+    elsewhere.mkdir()
+    photo = make_image(origin / "photo.png")
+    win.open_file(photo)
+    add_dimension(win)
+    asked = []
+    monkeypatch.setattr(win, "_ask_save_path", lambda default: asked.append(default) or elsewhere / "garden.png")
+    assert win.save_as()
+    assert sorted(p.name for p in origin.iterdir()) == ["photo.png"]
+    win.open_file(photo)  # the original finds its export through this computer's own list
+    assert win.canvas.doc.dimensions == [DIM]
+    win.open_file(elsewhere / "garden.png")  # and the export finds its original
+    assert win.source == photo and win.canvas.doc.dimensions == [DIM]
+    add_dimension(win)
+    win.save()  # Ctrl+S keeps writing to the chosen file
+    assert not (origin / "photo_dims.png").exists()
+    assert len(json.loads(QImage(str(elsewhere / "garden.png")).text("dimensio"))["dimensions"]) == 2
+    win.save_as()
+    assert asked[-1].parent == elsewhere  # Save As remembers the folder
+
+
+def test_hidden_layers_keep_the_json_and_say_so(win, tmp_path):
+    photo = make_image(tmp_path / "photo.png")
+    win.open_file(photo)
+    add_dimension(win)
+    win.layer_actions["dimension"].setChecked(False)
+    win.save()
+    assert load_sidecar(sidecar_path(photo)).dimensions == [DIM]
+    assert "hidden" in win.statusBar().currentMessage()
+
+
+def test_save_as_is_in_the_toolbar(win):
+    from PySide6.QtWidgets import QToolBar
+
+    [bar] = win.findChildren(QToolBar)
+    assert win.save_as_action in bar.actions()

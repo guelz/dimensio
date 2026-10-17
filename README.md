@@ -24,8 +24,8 @@ friend, an AI drawing your house model) knows without asking which number belong
 - Text always lies along the line and is never upside down
 - Each layer (dimensions, levels, lines, notes, circles) has its own color, line width and outline;
   text size, ID tags and which layers are shown apply to the whole picture
-- Saves a flat `photo_dims.png` to send to people, plus `photo.jpg.dims.json` so you can keep
-  editing later — opening either `photo.jpg` or `photo_dims.png` brings the editable lines back
+- Saves one flat `photo_dims.png` to send to people — opening either `photo.jpg` or the saved
+  picture brings the editable lines back; **Save As** puts it anywhere, so the photo folder stays clean
 - Copy the result straight to the clipboard
 
 ## Install
@@ -54,7 +54,7 @@ pipx install --system-site-packages git+https://github.com/guelz/dimensio
 | Open | `dimensio photo.jpg`, Open With, drag and drop, Ctrl+O, or paste (Ctrl+V) |
 | Tool | **1**/**D** dimension, **2**/**L** level marker, **3** line, **4**/**T** note, **5**/**C** circle (toolbar). Each tool is its own layer: it only selects, moves and edits its own kind, clicks go straight through everything else, and the toolbar's color / width / outline apply to that layer |
 | Dimension | click A, click B, type the label, Enter |
-| Chain | Ctrl+click every point but the last; Enter/Tab walks the labels, Shift+Tab goes back |
+| Chain | hold **Ctrl** and click every point; **let go of Ctrl** to finish (or Enter, or double-click the last point). Enter/Tab then walks the labels, Shift+Tab goes back |
 | Angle | in a chain, Tab walks length → angle at the corner → length …; leave an angle empty to skip it |
 | Level | with the level tool, click the spot and type its height; drag the marker away if it's in the way |
 | Line | click, Ctrl+click for more points, click to finish; drag to move it |
@@ -68,13 +68,15 @@ pipx install --system-site-packages git+https://github.com/guelz/dimensio
 | Layers | **Layers** menu: tick off a kind to hide it — in the view *and* the saved picture (the `.dims.json` keeps it); picking its tool shows it again |
 | Undo / redo | Ctrl+Z / Ctrl+Shift+Z |
 | Zoom / pan | Ctrl+wheel, middle-drag or Space+drag, **F** fits the whole picture |
-| Save | Ctrl+S → `photo_dims.png` + `photo.jpg.dims.json`; Ctrl+Shift+S to choose |
+| Save | **Save** (Ctrl+S) → `photo_dims.png` next to the photo, or wherever you last saved this picture; **Save As** (Ctrl+Shift+S) to choose, it remembers the folder. Tick **Save .json** to also keep `photo.jpg.dims.json` next to the photo |
 | Copy result | Ctrl+C |
 
 ## For scripts and AI assistants
 
-Every exported PNG carries its dimension data as JSON inside the file, and the same data sits in
-the `.dims.json` next to the original. It names every item (`A`, `B`, … for dimensions, `L1`, …
+Every saved PNG carries its dimension data as JSON inside the file (and in the optional `.dims.json`).
+To be upfront about what that is: only what you can see in the picture — no hidden layers, no folder
+paths — plus the original's file name and a checksum so Dimensio can find it again. Which export
+belongs to which photo is remembered on your computer only, never in the file. It names every item (`A`, `B`, … for dimensions, `L1`, …
 for levels, `N1`, … for lines, `T1`, … for notes — switch on **IDs** to tag them in the picture
 too) and explains its own fields: pixel coordinates of every point, the text of every segment,
 angle, level and note.

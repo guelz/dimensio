@@ -36,6 +36,7 @@ from .model import (
     find_original,
     from_json,
     is_hex_color,
+    kind_of,
     original_from_data,
     load_sidecar,
     output_path,
@@ -59,6 +60,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.settings = QSettings("dimensio", "dimensio")
         self.source: Path | None = None
+        self.target: Path | None = None  # where Save writes: the export this picture came from or went to
         self._keep_sidecar = False  # True when the existing sidecar could not be read: never overwrite it
         self.canvas = Canvas(self)
         self.canvas.setAcceptDrops(False)  # drops are handled by the window
@@ -147,8 +149,16 @@ class MainWindow(QMainWindow):
         bar = self.addToolBar("Main")
         bar.setMovable(False)
         bar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        for action in (self.open_action, self.save_action, self.copy_action, self.fit_action):
+        for action in (self.open_action, self.save_action, self.save_as_action, self.copy_action, self.fit_action):
             bar.addAction(action)
+        self.json_box = QCheckBox("Save .json")
+        self.json_box.setToolTip(
+            "Also write photo.jpg.dims.json next to the original. Without it the saved PNG carries the data "
+            "of everything visible in it, and re-editing works from that."
+        )
+        self.json_box.setChecked(self.settings.value("json", False, type=bool))
+        self.json_box.toggled.connect(lambda on: (self.settings.setValue("json", on), self.canvas.setFocus()))
+        bar.addWidget(self.json_box)
         bar.addSeparator()
         for action in (self.dimension_action, self.level_action, self.line_action, self.note_action, self.circle_action):
             bar.addAction(action)
@@ -313,14 +323,14 @@ class MainWindow(QMainWindow):
     def open_file(self, path: Path) -> bool:
         if not self._confirm_discard():
             return False
-        path = path.absolute()
-        original = find_original(path)
-        embedded = None
-        if original is None:  # an exported image whose sidecar is gone still carries the data
-            embedded = read_embedded(path)
-            original = original_from_data(path, embedded)
-        if original is not None:
-            path = original
+        opened = path = path.absolute()
+        embedded = read_embedded(opened)  # an exported picture carries its data
+        original = find_original(opened)
+        if original is None and embedded is not None:
+            original = original_from_data(opened, embedded) or _indexed_original(embedded)
+        target = None
+        if original is not None and original != opened:
+            path, target = original, opened
         try:
             image = load_image(path)
         except ImageLoadError as e:
@@ -337,18 +347,23 @@ class MainWindow(QMainWindow):
             except SidecarError as e:
                 keep_sidecar = True
                 self._warn(f"Ignoring {side.name} because it could not be read. It will be left untouched.\n\n{e}")
-        elif embedded is not None:
-            try:
-                saved = from_json(embedded)
-            except SidecarError:
-                saved = None
+        else:
+            if target is None:  # opened the original itself: find what it was exported to
+                target = _find_export(path, info.sha256)
+                embedded = read_embedded(target) if target is not None else None
+            if embedded is not None:
+                try:
+                    saved = from_json(embedded)
+                except SidecarError:
+                    saved = None
         if saved is not None and (saved.image is None or saved.image.matches(info) or self._ask_load_anyway()):
             doc = Document(saved.style, saved.dimensions, info)
         self.source = path
+        self.target = target
         self._keep_sidecar = keep_sidecar
         self.canvas.set_document(image, doc)
         self._loaded()
-        if original is not None:
+        if original is not None and original != opened:
             self.statusBar().showMessage(f"Opened the original {path.name}, so the dimensions stay editable", 8000)
         return True
 
@@ -366,6 +381,7 @@ class MainWindow(QMainWindow):
         if not self._confirm_discard():
             return
         self.source = None
+        self.target = None
         self.canvas.set_document(image, Document(self._new_style(image.width(), image.height())))
         self._loaded()
 
@@ -375,7 +391,7 @@ class MainWindow(QMainWindow):
         if self.source is None:
             return self.save_as()
         try:
-            self._write(output_path(self.source))
+            self._write(self.target or output_path(self.source))
         except OSError as e:
             self._warn(f"Could not save next to the original.\n\n{e}\n\nChoose another location.")
             return self.save_as()
@@ -384,8 +400,11 @@ class MainWindow(QMainWindow):
     def save_as(self) -> bool:
         if self.canvas.doc is None:
             return False
-        default = output_path(self.source) if self.source else Path.home() / "dimensions.png"
-        target = self._ask_save_path(default)
+        name = (self.target or (output_path(self.source) if self.source else Path("dimensions.png"))).name
+        folder = self.settings.value("save_dir", "")  # Save As remembers where you put exports
+        if not folder or not Path(folder).is_dir():
+            folder = str(self.source.parent if self.source else Path.home())
+        target = self._ask_save_path(Path(folder) / name)
         if target is None:
             return False
         if target.suffix.lower() not in (".png", ".jpg", ".jpeg"):
@@ -395,22 +414,32 @@ class MainWindow(QMainWindow):
         except OSError as e:
             self._warn(f"Could not save the image.\n\n{e}")
             return False
+        self.settings.setValue("save_dir", str(target.parent))
         return True
 
     def _write(self, target: Path) -> None:
+        doc = self.canvas.doc
         image = self.canvas.flattened()
-        image.setText(EMBED_KEY, to_json_text(self.canvas.doc, visible_only=True))  # the export explains itself
+        # Only what is visible in the picture travels with it; hidden layers never do.
+        image.setText(EMBED_KEY, to_json_text(doc, visible_only=True))
         save_image(image, target)
-        if self.source is not None and self._keep_sidecar:
-            self._warn(f"Saved {target.name}. {sidecar_path(self.source).name} was left untouched, so these dimensions are not kept for re-editing.")
-        elif self.source is not None:
+        self.target = target
+        message = f"Saved {target} (with the data of what it shows inside)"
+        if self.source is not None:
+            _remember_export(doc.image.sha256 if doc.image else "", self.source, target)
+            hidden_items = any(kind_of(d) in doc.style.hidden for d in doc.dimensions)
             side = sidecar_path(self.source)
-            try:
-                save_sidecar(self.canvas.doc, side)
-            except OSError as e:
-                self._warn(f"Saved {target.name}, but could not write {side.name} to keep the dimensions editable.\n\n{e}")
+            if self._keep_sidecar and (self.json_box.isChecked() or hidden_items):
+                self._warn(f"Saved {target.name}. {side.name} was left untouched, so these dimensions are not kept for re-editing.")
+            elif self.json_box.isChecked() or hidden_items:
+                try:
+                    save_sidecar(doc, side)
+                    if hidden_items and not self.json_box.isChecked():
+                        message += f"; hidden layers are kept in {side.name}"
+                except OSError as e:
+                    self._warn(f"Saved {target.name}, but could not write {side.name} to keep the dimensions editable.\n\n{e}")
         self.canvas.undo.setClean()
-        self.statusBar().showMessage(f"Saved {target}", 5000)
+        self.statusBar().showMessage(message, 8000)
 
     def copy(self) -> None:
         if self.canvas.doc is None:
@@ -485,9 +514,51 @@ class MainWindow(QMainWindow):
             event.ignore()
 
 
+def _exports() -> QSettings:
+    return QSettings("dimensio", "exports")
+
+
+def _remember_export(sha256: str, original: Path, export: Path) -> None:
+    """Which export belongs to which photo, kept on this computer only."""
+    if sha256:
+        _exports().setValue(sha256, json.dumps({"original": str(original), "export": str(export)}))
+
+
+def _indexed(sha256: object) -> dict:
+    if not isinstance(sha256, str) or not sha256:
+        return {}
+    try:
+        entry = json.loads(_exports().value(sha256, "{}"))
+    except (TypeError, ValueError):
+        return {}
+    return entry if isinstance(entry, dict) else {}
+
+
+def _indexed_original(data: dict) -> Path | None:
+    image = data.get("image") if isinstance(data, dict) else None
+    entry = _indexed(image.get("sha256") if isinstance(image, dict) else None)
+    candidate = Path(entry["original"]) if isinstance(entry.get("original"), str) else None
+    return candidate if candidate is not None and candidate.is_file() else None
+
+
+def _find_export(original: Path, sha256: str) -> Path | None:
+    """The saved picture of `original`: <stem>_dims.png next to it, else wherever this computer saved it."""
+    candidates = [output_path(original)]
+    entry = _indexed(sha256)
+    if isinstance(entry.get("export"), str):
+        candidates.insert(0, Path(entry["export"]))
+    for candidate in candidates:
+        if candidate.is_file() and read_embedded(candidate) is not None:
+            return candidate
+    return None
+
+
 def _print_data(path: Path) -> int:
     """JSON for scripts and AI assistants: data embedded in an export, else the sidecar next to the image."""
     data = read_embedded(path) if path.is_file() else None
+    if data is None and not sidecar_path(path).is_file() and path.is_file():
+        export = _find_export(path, "")
+        data = read_embedded(export) if export is not None else None
     if data is None and sidecar_path(path).is_file():
         try:
             data = json.loads(to_json_text(load_sidecar(sidecar_path(path))))
