@@ -420,11 +420,41 @@ class HandleItem(QGraphicsEllipseItem):
             return
         parent = self.parentItem()
         p = event.scenePos()
-        parent.set_dimension(parent.with_point(self.index, (p.x(), p.y())))
+        point = parent.canvas.snap_point((p.x(), p.y()), event.modifiers(), exclude=parent)
+        parent.set_dimension(parent.with_point(self.index, point))
 
     def mouseReleaseEvent(self, event) -> None:
         if self._start is None:
             return
         start, self._start = self._start, None
         parent = self.parentItem()
+        parent.canvas.hide_snap_marker()
         parent.canvas.commit_edit(parent, start, "Move point")
+
+
+class SnapMarker(QGraphicsItem):
+    """Shows where the next point will land: a ring on a point, a cross on a line or circle."""
+
+    SIZE = 7  # screen pixels
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.kind = "point"
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations)
+        self.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
+        self.setZValue(10)
+
+    def boundingRect(self) -> QRectF:
+        r = self.SIZE + 2
+        return QRectF(-r, -r, 2 * r, 2 * r)
+
+    def paint(self, painter, option, widget=None) -> None:
+        pen = QPen(QApplication.palette().color(QPalette.ColorRole.Highlight), 2)
+        painter.setPen(pen)
+        painter.setRenderHint(painter.RenderHint.Antialiasing)
+        r = self.SIZE
+        if self.kind == "point":
+            painter.drawEllipse(QPointF(0, 0), r, r)
+        else:
+            painter.drawLine(QPointF(-r, -r), QPointF(r, r))
+            painter.drawLine(QPointF(-r, r), QPointF(r, -r))

@@ -10,11 +10,13 @@ from PySide6.QtGui import QColor, QImage, QPainter, QPalette, QPixmap, QUndoStac
 from PySide6.QtWidgets import QGraphicsScene, QGraphicsView, QLineEdit, QWidget
 
 from .commands import AddDimension, ChangeDimension, ChangeStyle, RemoveDimension
-from .items import EditableItem, HandleItem, PathsItem, make_item
+from .geometry import snap, snap_targets
+from .items import EditableItem, HandleItem, PathsItem, SnapMarker, make_item
 from .model import Annotation, Circle, Dimension, Document, Level, Line, Note, Point, Style, annotation_ids, kind_of
 from .render import export_image
 
 HIT_TOLERANCE = 6  # screen pixels around a dimension line that still grab it
+SNAP_RADIUS = 8  # screen pixels within which new points snap to existing geometry
 MIN_POINT_DISTANCE = 3  # screen pixels; a closer click is ignored
 ZOOM_STEP = 1.25
 EDITOR_WIDTH = 180
@@ -96,6 +98,7 @@ def _with_field(dim: Annotation, field: int, text: str) -> Annotation:
 
 class Canvas(QGraphicsView):
     style_changed = Signal(object)  # Style, after every style change including undo
+    snap_changed = Signal(bool)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -117,13 +120,16 @@ class Canvas(QGraphicsView):
         self._preview: PathsItem | None = None
         self._editor: LabelEditor | None = None
         self._edit: _LabelEdit | None = None
-        self.tool = "dimension"  # or "level", "line", "note"
+        self.tool = "dimension"  # or "level", "line", "note", "circle"
+        self.snap_enabled = True
+        self._marker: SnapMarker | None = None
 
     # ----- document -----
 
     def set_document(self, image: QImage, doc: Document) -> None:
         self.finish_interaction()
         self.scene().clear()
+        self._marker = None  # deleted with the scene
         self._items = []
         self.image, self.doc = image, doc
         self.scene().addPixmap(QPixmap.fromImage(image))
@@ -150,6 +156,35 @@ class Canvas(QGraphicsView):
     def _activate(self, item: EditableItem) -> None:
         item.set_active(kind_of(item.dim) == self.tool)
         item.setVisible(kind_of(item.dim) not in self.doc.style.hidden)
+
+    def set_snap(self, enabled: bool) -> None:
+        self.snap_enabled = enabled
+        self.hide_snap_marker()
+        self.snap_changed.emit(enabled)
+
+    def snap_point(self, point: Point, modifiers, exclude: EditableItem | None = None) -> Point:
+        """`point` moved onto nearby geometry (shown by the marker), unless snapping is off or Alt is held."""
+        if not self.snap_enabled or self.doc is None or modifiers & Qt.KeyboardModifier.AltModifier:
+            self.hide_snap_marker()
+            return point
+        items = [item.dim for item in self._items if item is not exclude and item.isVisible()]
+        targets = snap_targets(items, self._draft[:-1])  # earlier draft points too: closes shapes
+        snapped, kind = snap(point, targets, SNAP_RADIUS / max(self.transform().m11(), 1e-6))
+        if kind is None:
+            self.hide_snap_marker()
+        else:
+            if self._marker is None:
+                self._marker = SnapMarker()
+                self.scene().addItem(self._marker)
+            self._marker.kind = kind
+            self._marker.setPos(QPointF(*snapped))
+            self._marker.update()
+            self._marker.show()
+        return snapped
+
+    def hide_snap_marker(self) -> None:
+        if self._marker is not None:
+            self._marker.hide()
 
     def has_image(self) -> bool:
         return self.image is not None
@@ -305,6 +340,10 @@ class Canvas(QGraphicsView):
             self._update_preview()
             event.accept()
             return
+        if self.image is not None and not event.buttons() and self._grabbable_item_at(event) is None:
+            self._event_point(event)  # preview where a click would land
+        elif not event.buttons():
+            self.hide_snap_marker()
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event) -> None:
@@ -329,7 +368,9 @@ class Canvas(QGraphicsView):
                 y = py
             else:
                 x = px
-        return (x, y)
+            self.hide_snap_marker()  # straight wins over snapping
+            return (x, y)
+        return self.snap_point((x, y), event.modifiers())
 
     def _grabbable_item_at(self, event):
         for item in self.items(event.position().toPoint()):
@@ -385,6 +426,7 @@ class Canvas(QGraphicsView):
         self._draft = []
         self._cursor = None
         self._remove_preview()
+        self.hide_snap_marker()
 
     def _finish_draft(self) -> None:
         points = self._draft

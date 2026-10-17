@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from .model import Circle, Dimension, Level, Note, Point
+from .model import Circle, Dimension, Level, Line, Note, Point
 
 ARROW_HALF_ANGLE = math.radians(15)
 ANGLE_RADIUS_LEG = 0.4  # arc radius as a share of the shorter leg ...
@@ -239,3 +239,47 @@ def layout(dim: Dimension, line_width: float, text_size: float) -> Layout:
             )
         )
     return Layout(tuple(segments), extension_lines, tuple(angles))
+
+
+@dataclass(frozen=True)
+class SnapTargets:
+    points: tuple[Point, ...] = ()
+    segments: tuple[tuple[Point, Point], ...] = ()
+    circles: tuple[tuple[Point, float], ...] = ()
+
+
+def snap_targets(items, extra_points=()) -> SnapTargets:
+    """Measured points, line corners, spots and circle centres; the edges between them; circle outlines."""
+    points, segments, circles = list(extra_points), [], []
+    for item in items:
+        if isinstance(item, (Dimension, Line)):
+            points += item.points
+            segments += zip(item.points, item.points[1:])
+        elif isinstance(item, (Level, Note)):
+            points.append(item.point)
+        elif isinstance(item, Circle):
+            points.append(item.center)
+            circles.append((item.center, item.radius))
+    return SnapTargets(tuple(points), tuple(segments), tuple(circles))
+
+
+def _closest_on_segment(p: Point, a: Point, b: Point) -> Point:
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    length2 = dx * dx + dy * dy
+    t = 0.0 if length2 == 0 else max(0.0, min(1.0, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / length2))
+    return (a[0] + t * dx, a[1] + t * dy)
+
+
+def snap(point: Point, targets: SnapTargets, tolerance: float) -> tuple[Point, str | None]:
+    """The nearest point within `tolerance` ("point"), else the nearest spot on a line or circle ("line")."""
+    best = min(targets.points, key=lambda q: math.dist(point, q), default=None)
+    if best is not None and math.dist(point, best) <= tolerance:
+        return best, "point"
+    candidates = [_closest_on_segment(point, a, b) for a, b in targets.segments]
+    for center, radius in targets.circles:
+        ux, uy = _unit(center, point)
+        candidates.append((center[0] + ux * radius, center[1] + uy * radius))
+    best = min(candidates, key=lambda q: math.dist(point, q), default=None)
+    if best is not None and math.dist(point, best) <= tolerance:
+        return best, "line"
+    return point, None

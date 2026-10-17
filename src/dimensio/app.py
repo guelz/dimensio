@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QMainWindow,
     QMenu,
+    QPushButton,
     QMessageBox,
     QSpinBox,
     QToolButton,
@@ -47,7 +48,7 @@ from .render import EMBED_KEY, ImageLoadError, load_image, read_embedded, save_i
 IMAGE_FILTER = "Images (*.jpg *.jpeg *.png *.webp *.tif *.tiff *.bmp *.heic *.heif *.avif);;All files (*)"
 SAVE_FILTER = "PNG image (*.png);;JPEG image (*.jpg *.jpeg)"
 HINT = (
-    "1-5: dimension, level, line, note, circle (each edits only its own kind) · Click, click, type · Ctrl+click: chain · Shift: straight · Esc: cancel · "
+    "1-5: dimension, level, line, note, circle (each edits only its own kind) · Click, click, type · Ctrl+click: chain · Shift: straight · Alt: no snap · Esc: cancel · "
     "Double-click label: edit · "
     "Ctrl+scroll: zoom · Middle or Space+drag: pan · F: fit · Ctrl+Z / Ctrl+Shift+Z: undo / redo"
 )
@@ -69,6 +70,16 @@ class MainWindow(QMainWindow):
         self.canvas.style_changed.connect(self._show_style)
         self.canvas.undo.cleanChanged.connect(lambda clean: self.setWindowModified(not clean))
         self.statusBar().addWidget(QLabel(HINT))  # stays visible; temporary messages cover it briefly
+        self.snap_status = QPushButton()
+        self.snap_status.setFlat(True)
+        self.snap_status.setToolTip("Snap new points to nearby points, lines and circles — click or press S; hold Alt to skip once")
+        self.snap_status.clicked.connect(self.snap_action.toggle)
+        self.statusBar().addPermanentWidget(self.snap_status)
+        self.canvas.snap_changed.connect(self._show_snap)
+        snap_on = self.settings.value("snap", True, type=bool)
+        self.snap_action.setChecked(snap_on)
+        self.canvas.set_snap(snap_on)
+        self._show_snap(snap_on)
         self._set_image_loaded(False)
         self._update_title()
         self.resize(1200, 800)
@@ -92,6 +103,9 @@ class MainWindow(QMainWindow):
         self._action("&Paste image", QKeySequence.StandardKey.Paste, self.paste)
         self.undo_action = self._action("&Undo", QKeySequence.StandardKey.Undo, self.undo, "edit-undo")
         self.redo_action = self._action("&Redo", "Ctrl+Shift+Z", self.redo, "edit-redo")
+        self.snap_action = self._action("&Snap", "S", lambda: None)
+        self.snap_action.setCheckable(True)
+        self.snap_action.toggled.connect(lambda on: self.canvas.set_snap(on))
         self.fit_action = self._action("&Fit", "F", self.canvas.fit, "zoom-fit-best")
         self.fit_action.setToolTip("Fit the whole picture into the window — F")
         self._action("&Quit", QKeySequence.StandardKey.Quit, self.close)
@@ -187,6 +201,18 @@ class MainWindow(QMainWindow):
         else:
             name = None
         self.setWindowTitle(f"{name}[*] — Dimensio" if name else "Dimensio")
+
+    def _show_snap(self, on: bool) -> None:
+        """Always visible bottom right, so a forgotten toggle is obvious."""
+        if on:
+            self.snap_status.setText("⌖ Snap on")
+            self.snap_status.setStyleSheet("color: #04B503; font-weight: bold;")
+        else:
+            self.snap_status.setText("Snap off")
+            self.snap_status.setStyleSheet("color: palette(placeholder-text); text-decoration: line-through;")
+        if self.snap_action.isChecked() != on:
+            self.snap_action.setChecked(on)
+        self.settings.setValue("snap", on)
 
     def _pick_tool(self, tool: str) -> None:
         self.canvas.set_tool(tool)

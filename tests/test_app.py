@@ -351,3 +351,13 @@ def test_circle_tool_and_layer_exist(win, tmp_path):
     assert win.canvas.tool == "circle"
     assert "circle" in win.layer_actions
     assert {s.toString() for s in win.circle_action.shortcuts()} == {"5", "C"}
+
+
+def test_snap_state_is_always_visible_and_s_toggles_it(win, tmp_path):
+    win.open_file(make_image(tmp_path / "a.png"))
+    assert win.canvas.snap_enabled and "on" in win.snap_status.text()
+    win.snap_action.trigger()
+    assert not win.canvas.snap_enabled and "off" in win.snap_status.text()
+    assert [s.toString() for s in win.snap_action.shortcuts()] == ["S"]
+    win.snap_status.click()  # the indicator itself toggles too
+    assert win.canvas.snap_enabled

@@ -217,3 +217,15 @@ def test_circle_text_gives_a_diameter_line_unless_it_starts_with_r():
     rad = circle_layout(Circle((100.0, 100.0), (200.0, 100.0), "r 40"), W, S)
     assert [tip for tip, _, _ in rad.arrows] == [(200.0, 100.0)]  # one arrow, at the edge
     assert rad.line[0] == (100.0, 100.0)  # from the centre
+
+
+def test_snap_prefers_points_then_lines_and_circles():
+    from dimensio.geometry import snap, snap_targets
+    from dimensio.model import Circle, Line
+
+    targets = snap_targets([Line(((0.0, 0.0), (100.0, 0.0))), Circle((300.0, 0.0), (350.0, 0.0))])
+    assert snap((3.0, 2.0), targets, 5.0) == ((0.0, 0.0), "point")  # line end beats the line itself
+    assert snap((40.0, 3.0), targets, 5.0) == ((40.0, 0.0), "line")  # onto the line
+    point, kind = snap((300.0, 47.0), targets, 5.0)  # onto the circle
+    assert kind == "line" and point == pytest.approx((300.0, 50.0))
+    assert snap((40.0, 9.0), targets, 5.0) == ((40.0, 9.0), None)  # too far

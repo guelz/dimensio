@@ -467,3 +467,43 @@ def test_circle_tool_centre_then_edge_then_optional_text(canvas, qtbot):
     drag(canvas, (200, 90), (220, 90))  # grab the circle's top and move it
     [moved] = canvas.doc.dimensions
     assert moved.center == pytest.approx((220, 150), abs=1.0) and moved.radius == pytest.approx(circle.radius)
+
+
+ALT = Qt.KeyboardModifier.AltModifier
+
+
+def test_new_points_snap_to_existing_ones_unless_alt_is_held(canvas, qtbot):
+    from dimensio.model import Line
+
+    line = Line(((50.0, 150.0), (350.0, 150.0)))
+    canvas.set_document(blank(), Document(style=STYLE, dimensions=[line]))
+    click(canvas, 52, 151)  # a couple of pixels off the line's end
+    click(canvas, 200, 152)  # near the middle of the line
+    qtbot.keyClick(canvas.label_editor(), Qt.Key.Key_Return)
+    dim = canvas.doc.dimensions[1]
+    assert dim.points[0] == (50.0, 150.0)
+    assert dim.points[1][1] == pytest.approx(150.0)
+    click(canvas, 348, 151, ALT)  # the line's other end, away from the dimension just drawn
+    click(canvas, 300, 100, ALT)
+    qtbot.keyClick(canvas.label_editor(), Qt.Key.Key_Return)
+    assert canvas.doc.dimensions[2].points[0] != (350.0, 150.0)
+
+
+def test_snapping_can_be_switched_off(canvas, qtbot):
+    from dimensio.model import Line
+
+    canvas.set_document(blank(), Document(style=STYLE, dimensions=[Line(((50.0, 150.0), (350.0, 150.0)))]))
+    canvas.set_snap(False)
+    click(canvas, 52, 151)
+    click(canvas, 200, 100)
+    qtbot.keyClick(canvas.label_editor(), Qt.Key.Key_Return)
+    assert canvas.doc.dimensions[1].points[0] != (50.0, 150.0)
+
+
+def test_a_chain_closes_on_its_first_point(canvas, qtbot):
+    canvas.set_tool("line")
+    click(canvas, 50, 50)
+    click(canvas, 250, 50, CTRL)
+    click(canvas, 250, 200, CTRL)
+    click(canvas, 52, 51)
+    assert canvas.doc.dimensions[0].points[-1] == canvas.doc.dimensions[0].points[0]
