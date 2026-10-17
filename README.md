@@ -63,7 +63,7 @@ pipx install --system-site-packages git+https://github.com/guelz/dimensio
 | Delete | select, Delete |
 | Layers | **Layers** menu: tick off a kind to hide it — in the view *and* the saved picture (the `.dims.json` keeps it); picking its tool shows it again |
 | Undo / redo | Ctrl+Z / Ctrl+Shift+Z |
-| Zoom / pan | Ctrl+wheel, middle-drag or Space+drag, Ctrl+0 fits |
+| Zoom / pan | Ctrl+wheel, middle-drag or Space+drag, **F** fits the whole picture |
 | Save | Ctrl+S → `photo_dims.png` + `photo.jpg.dims.json`; Ctrl+Shift+S to choose |
 | Copy result | Ctrl+C |
 

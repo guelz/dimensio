@@ -18,12 +18,13 @@ from dimensio.model import (
 
 
 def test_style_for_image_scales_with_diagonal():
-    style = Style.for_image(4032, 3024)  # diagonal 5040
-    assert style == Style(line_width=13, text_size=101, color=DEFAULT_COLOR)
+    style = Style.for_image(4032, 3024)  # 12 MP phone photo, diagonal 5040
+    assert style == Style(line_width=3, text_size=35, color=DEFAULT_COLOR)
+    assert Style.for_image(640, 448) == Style(line_width=1, text_size=6, color=DEFAULT_COLOR)
 
 
-def test_style_line_width_has_a_floor():
-    assert Style.for_image(100, 100).line_width == 2
+def test_style_has_floors_for_tiny_images():
+    assert Style.for_image(100, 100) == Style(line_width=1, text_size=6, color=DEFAULT_COLOR)
 
 
 def test_dimension_needs_two_points():

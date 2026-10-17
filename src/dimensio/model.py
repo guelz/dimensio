@@ -40,7 +40,8 @@ class Style:
     @classmethod
     def for_image(cls, width: int, height: int, color: str = DEFAULT_COLOR) -> Style:
         diagonal = math.hypot(width, height)
-        return cls(line_width=max(2, round(0.0025 * diagonal)), text_size=round(0.02 * diagonal), color=color)
+        # Fitted to what Philipp sets by hand: 2-3 px / ~36 px on a 12 MP photo, 1 px / 6 px on a 640 px plan.
+        return cls(line_width=max(1, round(0.0005 * diagonal)), text_size=max(6, round(0.007 * diagonal)), color=color)
 
 
 @dataclass(frozen=True)

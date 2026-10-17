@@ -48,7 +48,7 @@ SAVE_FILTER = "PNG image (*.png);;JPEG image (*.jpg *.jpeg)"
 HINT = (
     "1-4: dimension, level, line, note (each edits only its own kind) · Click, click, type · Ctrl+click: chain · Shift: straight · Esc: cancel · "
     "Double-click label: edit · "
-    "Ctrl+scroll: zoom · Middle or Space+drag: pan · Ctrl+0: fit · Ctrl+Z / Ctrl+Shift+Z: undo / redo"
+    "Ctrl+scroll: zoom · Middle or Space+drag: pan · F: fit · Ctrl+Z / Ctrl+Shift+Z: undo / redo"
 )
 
 
@@ -91,7 +91,8 @@ class MainWindow(QMainWindow):
         self._action("&Paste image", QKeySequence.StandardKey.Paste, self.paste)
         self.undo_action = self._action("&Undo", QKeySequence.StandardKey.Undo, self.undo, "edit-undo")
         self.redo_action = self._action("&Redo", "Ctrl+Shift+Z", self.redo, "edit-redo")
-        self._action("&Fit to window", "Ctrl+0", self.canvas.fit, "zoom-fit-best")
+        self.fit_action = self._action("&Fit", "F", self.canvas.fit, "zoom-fit-best")
+        self.fit_action.setToolTip("Fit the whole picture into the window — F")
         self._action("&Quit", QKeySequence.StandardKey.Quit, self.close)
         self.tools = QActionGroup(self)
         self.dimension_action = self._action("&Dimension", "1", lambda: self.canvas.set_tool("dimension"))
@@ -127,7 +128,7 @@ class MainWindow(QMainWindow):
         bar = self.addToolBar("Main")
         bar.setMovable(False)
         bar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        for action in (self.open_action, self.save_action, self.copy_action):
+        for action in (self.open_action, self.save_action, self.copy_action, self.fit_action):
             bar.addAction(action)
         bar.addSeparator()
         for action in (self.dimension_action, self.level_action, self.line_action, self.note_action):

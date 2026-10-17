@@ -322,3 +322,11 @@ def test_layer_checkmarks_hide_kinds_in_view_and_export(win, tmp_path):
     assert load_sidecar(sidecar_path(photo)).dimensions == [DIM]
     win.undo()
     assert win.layer_actions["dimension"].isChecked()
+
+
+def test_f_fits_the_picture(win, tmp_path):
+    win.open_file(make_image(tmp_path / "a.png"))
+    win.canvas.zoom(4.0)
+    win.fit_action.trigger()
+    assert [s.toString() for s in win.fit_action.shortcuts()] == ["F"]
+    assert win.canvas.transform().m11() < 4.0
