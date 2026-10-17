@@ -4,12 +4,16 @@ Add dimension lines with **your own measurements** to photos — the way a techn
 it, but on a picture of a sofa, a wall or a window opening. Click two points, type `284 cm`,
 drag the line clear of the object. Done.
 
+![Dimensio](docs/screenshot.png)
+
 **Dimensio doesn't measure anything.** No scale, no calibration, no photogrammetry. You already
 know your numbers from the tape measure, the plan or the datasheet. Dimensio is for *handing them
 on*: the quickest way to put them on a picture so clearly that whoever gets it (a carpenter, a
 friend, an AI drawing your house model) knows without asking which number belongs to which edge.
 
 ![Dimensio examples](docs/examples.png)
+
+<sub>Sofa photo: [Bluestspruce](https://commons.wikimedia.org/wiki/File:Couch_left_on_a_curb.jpg), CC0, via Wikimedia Commons.</sub>
 
 - Click, click, type: a dimension line with arrowheads and your label
 - Drag the line anywhere; extension lines follow the drag direction, so dimensions sit naturally
